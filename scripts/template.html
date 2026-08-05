@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Panel de Cobertura de Producto &middot; Pronto Express</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;
+    --series-1-wash:  #cde2fb;
+    --status-good:    #0ca30c;
+    --status-good-bg: #e6f5e6;
+    --status-crit:    #d03b3b;
+    --status-crit-bg: #fbeaea;
+    --chip-bg:        #f1f0ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-1-wash:  #184f95;
+      --status-good:    #0ca30c;
+      --status-good-bg: #123312;
+      --status-crit:    #e66767;
+      --status-crit-bg: #3a1414;
+      --chip-bg:        #232320;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-1-wash:  #184f95;
+    --status-good:    #0ca30c;
+    --status-good-bg: #123312;
+    --status-crit:    #e66767;
+    --status-crit-bg: #3a1414;
+    --chip-bg:        #232320;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  .viz-root {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 28px 20px 64px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  .sidebar {
+    position: sticky; top: 20px;
+    max-height: calc(100vh - 40px); overflow-y: auto;
+    -ms-overflow-style: none; scrollbar-width: thin;
+  }
+  .sidebar .card:last-child { margin-bottom: 0; }
+  .main { min-width: 0; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+  .sidebar .filters { flex-direction: column; align-items: stretch; }
+  .sidebar .filters .filter-group { width: 100%; }
+  .sidebar .filters select, .sidebar .filters input[type="text"] { width: 100%; }
+  .sidebar .product-groups { max-height: 260px; }
+  header.hero { margin-bottom: 22px; }
+  header.hero h1 { font-size: 25px; margin: 0 0 6px; }
+  header.hero .meta { color: var(--text-secondary); font-size: 13.5px; }
+  header.hero .meta b { color: var(--text-primary); }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .card h2 { font-size: 15.5px; margin: 0 0 12px; }
+  .card h2 .n { color: var(--text-muted); font-weight: 400; }
+  p { margin: 0 0 10px; }
+  p:last-child { margin-bottom: 0; }
+  .lede { font-size: 14px; color: var(--text-secondary); }
+
+  /* --- selector de producto --- */
+  .product-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .product-toolbar input[type="text"] {
+    flex: 1; min-width: 220px; font: inherit; font-size: 13.5px; padding: 9px 12px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+  }
+  .selected-chip {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--chip-bg);
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px 5px 12px; font-size: 12.5px;
+  }
+  .selected-chip button {
+    border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 13px;
+    line-height: 1; padding: 2px 4px; border-radius: 999px;
+  }
+  .selected-chip button:hover { color: var(--status-crit); background: var(--status-crit-bg); }
+  #selected-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; min-height: 20px; }
+  .btn-link { font: inherit; font-size: 12.5px; color: var(--series-1); background: none; border: none; cursor: pointer; padding: 4px 0; text-decoration: underline; }
+
+  .product-groups { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; }
+  .product-groups details { border-bottom: 1px solid var(--gridline); padding: 6px 0; }
+  .product-groups details:last-child { border-bottom: none; }
+  .product-groups summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 2px; list-style: none; display: flex; align-items: center; gap: 8px; }
+  .product-groups summary::-webkit-details-marker { display: none; }
+  .product-groups summary .arrow { transition: transform 0.15s; color: var(--text-muted); font-size: 10px; }
+  .product-groups details[open] summary .arrow { transform: rotate(90deg); }
+  .product-groups summary .count { color: var(--text-muted); font-weight: 400; font-size: 11.5px; }
+  .line-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 22px; font-size: 12.5px; }
+  .line-row label { cursor: pointer; flex: 1; }
+  .line-row.hidden, .group-hidden { display: none !important; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+  .filters select, .filters input[type="text"] {
+    font: inherit; font-size: 13.5px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
+  .filters input[type="text"] { flex: 1; min-width: 180px; }
+  .filters label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .filter-group { display: flex; flex-direction: column; }
+  .pill-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill-toggles label {
+    display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; cursor: pointer; background: var(--surface-1);
+  }
+  .pill-toggles input[type="radio"]:checked ~ span,
+  .pill-toggles label:has(input:checked) { border-color: var(--series-1); background: var(--series-1-wash); }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px; }
+  .tile .label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+  .tile .value { font-size: 24px; font-weight: 600; }
+  .tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+
+  ul.findings { margin: 0; padding-left: 20px; }
+  ul.findings li { margin-bottom: 8px; font-size: 14px; }
+  ul.findings b { color: var(--text-primary); }
+
+  .chart-svg { width: 100%; height: auto; display: block; }
+  .chart-svg .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .chart-svg .axis-label { fill: var(--text-muted); font-size: 10.5px; }
+  .chart-svg .axis-title { fill: var(--text-secondary); font-size: 11px; }
+  .chart-svg .ref-diag { stroke: var(--baseline); stroke-width: 1.5; stroke-dasharray: 3 4; }
+  .chart-svg .area-fill { fill: var(--series-1); opacity: 0.10; }
+  .chart-svg .line-main { fill: none; stroke: var(--series-1); stroke-width: 2.5; }
+  .chart-svg .marker-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 2 3; }
+  .chart-svg .marker-dot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .chart-svg .marker-label { fill: var(--text-primary); font-size: 11.5px; font-weight: 600; }
+  .chart-svg.bars .bar-fill { fill: var(--series-1); }
+  .chart-svg.bars .bar-fill-zero { fill: var(--status-crit); opacity: 0.55; }
+  .chart-svg.bars .bar-label { fill: var(--text-primary); font-size: 12px; }
+  .chart-svg.bars .bar-value { fill: var(--text-secondary); font-size: 11.5px; }
+  .empty-chart { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
+
+  .summary-row { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; font-size: 13.5px; }
+  .summary-row .chip { background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; }
+  .summary-row .chip b { font-variant-numeric: tabular-nums; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--gridline);
+    position: sticky; top: 0; background: var(--surface-1);
+  }
+  table.data-table td { padding: 7px 10px; border-bottom: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
+  table.data-table td.name-cell { font-variant-numeric: normal; }
+  table.data-table tr:hover td { background: var(--page); }
+  .table-scroll { max-height: 520px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .badge.yes { color: var(--status-good); background: var(--status-good-bg); }
+  .badge.no { color: var(--status-crit); background: var(--status-crit-bg); }
+  .zone-tag { font-size: 11px; color: var(--text-muted); }
+
+  .foot-note { font-size: 12px; color: var(--text-muted); margin-top: 26px; }
+  .foot-note p { margin-bottom: 6px; }
+
+  .print-only { display: none; }
+  .btn-print {
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; background: var(--surface-1);
+    color: var(--text-primary); white-space: nowrap;
+  }
+  .btn-print:hover { background: var(--page); }
+
+  @media print {
+    body.print-table-only .viz-root { background: #fff !important; padding: 0 !important; }
+    body.print-table-only .wrap > header.hero { display: none !important; }
+    body.print-table-only .layout { display: block !important; }
+    body.print-table-only .sidebar { display: none !important; }
+    body.print-table-only #results-empty,
+    body.print-table-only .main > .tiles,
+    body.print-table-only .main > .card:not(#client-detail-card) { display: none !important; }
+    body.print-table-only #client-detail-card { border: none !important; padding: 0 !important; }
+    body.print-table-only .btn-print { display: none !important; }
+    body.print-table-only .print-only { display: block; margin-bottom: 10px; font-size: 12px; color: #333; }
+    body.print-table-only .foot-note { display: none !important; }
+    body.print-table-only .table-scroll { max-height: none !important; overflow: visible !important; border: none !important; }
+    body.print-table-only table.data-table th { position: static !important; }
+    body.print-table-only .viz-root, body.print-table-only .viz-root * {
+      background: #fff !important; color: #000 !important; box-shadow: none !important;
+    }
+    body.print-table-only .badge.yes { border: 1px solid #0ca30c; color: #0ca30c !important; }
+    body.print-table-only .badge.no { border: 1px solid #d03b3b; color: #d03b3b !important; }
+    body.print-table-only table.data-table td, body.print-table-only table.data-table th { border-bottom: 1px solid #ccc !important; }
+    body.print-table-only table.data-table tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Panel de Cobertura de Producto &mdash; Pronto Express</h1>
+    <div class="meta">
+      Alcance: <b>__TOTAL_CLIENTES__ clientes</b> &middot; <b>5 vendedores</b> (Lucas Serey, Maximiliano Luna, Gabriela Brandan, Analia Valenti, Superv. Vanesa Stabile) &middot;
+      Generado: <b>__FECHA_GENERADO__</b> &middot; Fuente: API Chess ERP (actualizacion automatica diaria)
+    </div>
+  </header>
+
+  <div class="layout">
+  <aside class="sidebar">
+  <div class="card">
+    <h2>1. Elegi el producto (o varios) a analizar</h2>
+    <p class="lede" style="margin-bottom:10px">Busca por nombre o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). El resto del panel se recalcula al instante.</p>
+    <div class="product-toolbar">
+      <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
+      <button class="btn-link" id="clear-products">Limpiar seleccion</button>
+    </div>
+    <div id="selected-chips"></div>
+    <div class="product-groups" id="product-groups"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Filtros</h2>
+    <div class="filters" style="margin-bottom:12px">
+      <div class="filter-group">
+        <label>Analizar por</label>
+        <div class="pill-toggles">
+          <label><input type="radio" name="f-metric" id="metric-money" value="money" checked> Dinero ($)</label>
+          <label><input type="radio" name="f-metric" id="metric-kg" value="kg"> Kilos (kg)</label>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Meses incluidos</label>
+        <div class="pill-toggles" id="month-toggles"></div>
+      </div>
+      <div class="filter-group">
+        <label for="f-zona">Zona</label>
+        <select id="f-zona">
+          <option value="">Todas</option>
+          <option value="Zona Paulina">Zona Paulina</option>
+          <option value="fuera">Fuera de Zona Paulina</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="f-vendedor">Vendedor</label>
+        <select id="f-vendedor"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label for="f-dia">Dia de ruta</label>
+        <select id="f-dia">
+          <option value="">Todos</option>
+          <option>Lunes</option><option>Martes</option><option>Miercoles</option>
+          <option>Jueves</option><option>Viernes</option>
+          <option value="Sin ruta / Online">Sin ruta / Online</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="f-subcanal">Subcanal MKT</label>
+        <select id="f-subcanal"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label for="f-compra">Compra</label>
+        <select id="f-compra">
+          <option value="">Todos</option>
+          <option value="si">Si compra</option>
+          <option value="no">No compra</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="f-buscar">Buscar cliente</label>
+        <input type="text" id="f-buscar" placeholder="Nombre del cliente...">
+      </div>
+    </div>
+  </div>
+  </aside>
+
+  <div class="main">
+
+  <div id="results-empty" class="card" style="display:none">
+    <p class="lede">Eleg&iacute; al menos un producto a la izquierda para ver el analisis.</p>
+  </div>
+
+  <div id="results">
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="card">
+      <h2>Hallazgos</h2>
+      <ul class="findings" id="findings"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Concentracion del total (curva de Pareto)</h2>
+      <p class="lede" style="margin-bottom:14px">Cuanto mas se aleja la curva azul hacia arriba-izquierda de la diagonal punteada (reparto parejo), mas concentrado esta el total en pocos clientes.</p>
+      <div id="chart-pareto"></div>
+    </div>
+
+    <div class="card">
+      <h2>Cobertura por subcanal MKT</h2>
+      <p class="lede" style="margin-bottom:14px">Ordenado de mayor a menor. El texto junto a cada barra muestra el total y la cobertura (clientes que compran / clientes totales del subcanal, dentro de los filtros activos).</p>
+      <div id="chart-subcanal"></div>
+    </div>
+
+    <div class="card">
+      <h2>Cobertura por vendedor</h2>
+      <p class="lede" style="margin-bottom:14px">% de clientes de la ruta L-V de cada vendedor (dentro de los filtros activos) que compraron el producto seleccionado al menos una vez.</p>
+      <div id="chart-vendedor"></div>
+    </div>
+
+    <div class="card" id="client-detail-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+        <h2 style="margin:0">Detalle cliente por cliente</h2>
+        <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
+      </div>
+      <div class="print-only" id="print-context"></div>
+      <div class="summary-row" id="summary-row"></div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
+              <th>Subcanal MKT</th><th>Compra</th><th id="th-valor">Importe periodo</th><th>Ultima compra</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+  </div>
+
+  <div class="foot-note">
+    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. La ruta de cada cliente es la vigente al momento de generar el informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
+    <p><b>Alcance:</b> __TOTAL_CLIENTES__ clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). __TOTAL_ARTICULOS__ articulos activos en el catalogo, agrupados en __TOTAL_LINEAS__ lineas de producto.</p>
+    <p>Datos extraidos en vivo de la API de Chess ERP el __FECHA_GENERADO__ (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
+  </div>
+
+</div>
+</div>
+<script>
+__DATA_JS__
+
+function money(n) { return "$" + Math.round(n).toLocaleString("es-AR"); }
+function kilos(n) { return n.toLocaleString("es-AR", {maximumFractionDigits: 1}) + " kg"; }
+function pct(n) { return n.toFixed(1).replace(".", ",") + "%"; }
+function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+/* ---------------- indices ---------------- */
+const CLI_BY_ID = new Map(CLIENTES.map(c => [c.id, c]));
+const ART_BY_ID = new Map(ARTICULOS.map(a => [a.id, a]));
+const LINEAS = {};
+ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
+
+/* ---------------- estado ---------------- */
+const state = {
+  productIds: new Set(ART_BY_ID.has(440669) ? [440669] : []),
+  months: new Set(MESES.map(m => m.key)),
+  metric: "money",
+};
+function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
+function labelMagnitud() { return state.metric === "kg" ? "Kilos vendidos" : "Facturacion"; }
+
+/* ---------------- panel de productos ---------------- */
+const groupsEl = document.getElementById("product-groups");
+Object.keys(LINEAS).sort().forEach(linea => {
+  const arts = LINEAS[linea];
+  const det = document.createElement("details");
+  det.dataset.linea = linea.toLowerCase();
+  const sum = document.createElement("summary");
+  sum.innerHTML = `<span class="arrow">&#9656;</span><input type="checkbox" class="line-check" data-linea="${esc(linea)}"><span>${esc(linea)}</span><span class="count">(${arts.length})</span>`;
+  det.appendChild(sum);
+  arts.forEach(a => {
+    const row = document.createElement("div");
+    row.className = "line-row";
+    row.dataset.name = a.n.toLowerCase();
+    row.innerHTML = `<input type="checkbox" class="product-check" data-id="${a.id}" ${state.productIds.has(a.id) ? "checked" : ""}><label>${esc(a.n)}</label>`;
+    det.appendChild(row);
+  });
+  groupsEl.appendChild(det);
+});
+
+function syncLineCheckboxes() {
+  document.querySelectorAll(".line-check").forEach(lc => {
+    const linea = lc.dataset.linea;
+    const boxes = Array.from(document.querySelectorAll(`.line-row input[type=checkbox]`)).filter(cb => cb.closest("details").querySelector(".line-check") === lc);
+    const total = boxes.length;
+    const checked = boxes.filter(b => b.checked).length;
+    lc.checked = checked === total && total > 0;
+    lc.indeterminate = checked > 0 && checked < total;
+  });
+}
+
+function renderChips() {
+  const wrap = document.getElementById("selected-chips");
+  if (state.productIds.size === 0) {
+    wrap.innerHTML = '<span style="color:var(--text-muted);font-size:12.5px">Ningun producto seleccionado</span>';
+    return;
+  }
+  wrap.innerHTML = Array.from(state.productIds).map(id => {
+    const a = ART_BY_ID.get(id);
+    return `<span class="selected-chip">${esc(a ? a.n : "id " + id)}<button data-id="${id}" title="Quitar">&times;</button></span>`;
+  }).join("");
+}
+
+groupsEl.addEventListener("change", (e) => {
+  if (e.target.classList.contains("product-check")) {
+    const id = Number(e.target.dataset.id);
+    if (e.target.checked) state.productIds.add(id); else state.productIds.delete(id);
+    syncLineCheckboxes();
+    renderChips();
+    render();
+  } else if (e.target.classList.contains("line-check")) {
+    const linea = e.target.dataset.linea;
+    const boxes = LINEAS[linea] || [];
+    boxes.forEach(a => {
+      if (e.target.checked) state.productIds.add(a.id); else state.productIds.delete(a.id);
+    });
+    groupsEl.querySelectorAll(`.product-check`).forEach(cb => {
+      const a = ART_BY_ID.get(Number(cb.dataset.id));
+      if (a && a.l === linea) cb.checked = e.target.checked;
+    });
+    renderChips();
+    render();
+  }
+});
+
+document.getElementById("selected-chips").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-id]");
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  state.productIds.delete(id);
+  const cb = groupsEl.querySelector(`.product-check[data-id="${id}"]`);
+  if (cb) cb.checked = false;
+  syncLineCheckboxes();
+  renderChips();
+  render();
+});
+
+document.getElementById("clear-products").addEventListener("click", () => {
+  state.productIds.clear();
+  groupsEl.querySelectorAll(".product-check").forEach(cb => cb.checked = false);
+  syncLineCheckboxes();
+  renderChips();
+  render();
+});
+
+document.getElementById("product-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  groupsEl.querySelectorAll("details").forEach(det => {
+    const linea = det.dataset.linea;
+    let anyMatch = linea.includes(q);
+    det.querySelectorAll(".line-row").forEach(row => {
+      const match = q === "" || row.dataset.name.includes(q) || linea.includes(q);
+      row.classList.toggle("hidden", !match);
+      if (match) anyMatch = true;
+    });
+    det.classList.toggle("group-hidden", !anyMatch);
+    if (q !== "" && anyMatch) det.open = true;
+  });
+});
+
+syncLineCheckboxes();
+renderChips();
+
+/* ---------------- meses dinamicos ---------------- */
+const monthsEl = document.getElementById("month-toggles");
+MESES.forEach(m => {
+  const lbl = document.createElement("label");
+  lbl.innerHTML = `<input type="checkbox" class="f-mes" value="${esc(m.key)}" checked> ${esc(m.label)}`;
+  monthsEl.appendChild(lbl);
+});
+
+/* ---------------- filtros restantes ---------------- */
+const vSel = document.getElementById("f-vendedor");
+const vendedoresSet = new Map();
+CLIENTES.forEach(c => { if (c.v != null) vendedoresSet.set(c.v, c.vn); });
+Array.from(vendedoresSet.entries()).sort((a,b)=>a[0]-b[0]).forEach(([num, nombre]) => {
+  const opt = document.createElement("option");
+  opt.value = num; opt.textContent = `V${num} - ${nombre}`;
+  vSel.appendChild(opt);
+});
+const scSel = document.getElementById("f-subcanal");
+Array.from(new Set(CLIENTES.map(c => c.sc))).sort().forEach(sc => {
+  const opt = document.createElement("option");
+  opt.value = sc; opt.textContent = sc;
+  scSel.appendChild(opt);
+});
+
+const dSel = document.getElementById("f-dia");
+const zSel = document.getElementById("f-zona");
+const compraSel = document.getElementById("f-compra");
+const buscarInput = document.getElementById("f-buscar");
+const mesChecks = document.querySelectorAll(".f-mes");
+const metricRadios = document.querySelectorAll('input[name="f-metric"]');
+
+mesChecks.forEach(cb => cb.addEventListener("change", () => {
+  state.months = new Set(Array.from(mesChecks).filter(c => c.checked).map(c => c.value));
+  render();
+}));
+metricRadios.forEach(r => r.addEventListener("change", () => {
+  if (r.checked) { state.metric = r.value; render(); }
+}));
+[vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
+buscarInput.addEventListener("input", render);
+
+document.getElementById("print-btn").addEventListener("click", () => {
+  document.body.classList.add("print-table-only");
+  window.print();
+});
+window.addEventListener("afterprint", () => document.body.classList.remove("print-table-only"));
+
+/* ---------------- SVG charts ---------------- */
+function paretoSVG(compradores, total) {
+  if (compradores.length === 0 || total <= 0) return '<div class="empty-chart">Sin compradores en la seleccion actual.</div>';
+  const W = 640, H = 300, PAD_L = 46, PAD_B = 34, PAD_T = 16, PAD_R = 16;
+  const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
+  const xOf = pc => PAD_L + pc / 100 * plotW;
+  const yOf = pf => PAD_T + plotH - pf / 100 * plotH;
+  let acum = 0, pts = [[0,0]];
+  compradores.forEach((c, i) => {
+    acum += c.valor;
+    pts.push([(i+1) / compradores.length * 100, acum / total * 100]);
+  });
+  const sampleEvery = Math.max(1, Math.floor(pts.length / 80));
+  const sampled = pts.filter((_, i) => i % sampleEvery === 0 || i === pts.length - 1);
+  const pathPts = sampled.map(p => `${xOf(p[0]).toFixed(1)},${yOf(Math.min(p[1],100)).toFixed(1)}`).join(" ");
+  const areaPts = `${xOf(0).toFixed(1)},${yOf(0).toFixed(1)} ` + pathPts + ` ${xOf(100).toFixed(1)},${yOf(0).toFixed(1)}`;
+  let idx80 = pts.findIndex(p => p[1] >= 80);
+  if (idx80 < 0) idx80 = pts.length - 1;
+  const p80 = pts[idx80];
+  const grid = [0,20,40,60,80,100].map(g =>
+    `<line x1="${PAD_L}" y1="${yOf(g).toFixed(1)}" x2="${W-PAD_R}" y2="${yOf(g).toFixed(1)}" class="gridline"/>` +
+    `<text x="${PAD_L-8}" y="${(yOf(g)+4).toFixed(1)}" class="axis-label" text-anchor="end">${g}%</text>`
+  ).join("");
+  const xticks = [0,20,40,60,80,100].map(g =>
+    `<text x="${xOf(g).toFixed(1)}" y="${H-PAD_B+18}" class="axis-label" text-anchor="middle">${g}%</text>`
+  ).join("");
+  const diag = `<line x1="${xOf(0).toFixed(1)}" y1="${yOf(0).toFixed(1)}" x2="${xOf(100).toFixed(1)}" y2="${yOf(100).toFixed(1)}" class="ref-diag"/>`;
+  const marker = `
+    <line x1="${xOf(p80[0]).toFixed(1)}" y1="${yOf(80).toFixed(1)}" x2="${xOf(p80[0]).toFixed(1)}" y2="${yOf(0).toFixed(1)}" class="marker-line"/>
+    <line x1="${PAD_L}" y1="${yOf(80).toFixed(1)}" x2="${xOf(p80[0]).toFixed(1)}" y2="${yOf(80).toFixed(1)}" class="marker-line"/>
+    <circle cx="${xOf(p80[0]).toFixed(1)}" cy="${yOf(80).toFixed(1)}" r="5" class="marker-dot"/>
+    <text x="${(xOf(p80[0])+8).toFixed(1)}" y="${(yOf(80)-8).toFixed(1)}" class="marker-label">${pct(p80[0])} de los compradores &#8594; 80% del total</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart-svg" role="img" aria-label="Curva de concentracion">
+    ${grid}${xticks}
+    <text x="${PAD_L}" y="${H-6}" class="axis-title">% acumulado de clientes compradores (ordenados de mayor a menor)</text>
+    ${diag}
+    <polygon points="${areaPts}" class="area-fill"/>
+    <polyline points="${pathPts}" class="line-main"/>
+    ${marker}
+  </svg>`;
+}
+
+function barsSVG(rows, opts) {
+  if (rows.length === 0) return '<div class="empty-chart">Sin datos para graficar.</div>';
+  rows = rows.slice(0, opts.maxRows || 14);
+  const barH = 22, gap = 14, padT = 4, labelW = 190, padR = opts.padR || 150, w = 640;
+  const rowH = barH + gap;
+  const h = padT + rowH * rows.length + 8;
+  const plotW = w - labelW - padR;
+  const maxV = opts.scaleMax || Math.max(...rows.map(r => r.value), 1);
+  let out = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg bars" role="img" aria-label="${esc(opts.ariaLabel||'')}">`;
+  rows.forEach((r, i) => {
+    const y = padT + i * rowH;
+    const bw = Math.max(2, r.value / maxV * plotW);
+    const cls = (opts.zeroColor && r.value === 0) ? "bar-fill-zero" : "bar-fill";
+    out += `<text x="${labelW-8}" y="${(y+barH/2+4).toFixed(1)}" class="bar-label" text-anchor="end">${esc(r.label)}</text>`;
+    out += `<rect x="${labelW}" y="${y}" width="${bw.toFixed(1)}" height="${barH}" rx="4" class="${cls}"/>`;
+    out += `<text x="${(labelW+bw+8).toFixed(1)}" y="${(y+barH/2+4).toFixed(1)}" class="bar-value">${r.valueLabel}</text>`;
+  });
+  out += "</svg>";
+  return out;
+}
+
+/* ---------------- calculo principal ---------------- */
+function render() {
+  const productIds = state.productIds;
+  const months = state.months;
+  const hasProducts = productIds.size > 0;
+  document.getElementById("results-empty").style.display = hasProducts ? "none" : "block";
+  document.getElementById("results").style.display = hasProducts ? "block" : "none";
+  if (!hasProducts) return;
+
+  const isKg = state.metric === "kg";
+  document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
+
+  // agregado por cliente segun productos+meses seleccionados
+  const aggByClient = new Map();
+  for (const row of VENTAS) {
+    const [c, a, m, imp, kg, fecha] = row;
+    if (!productIds.has(a) || !months.has(m)) continue;
+    let e = aggByClient.get(c);
+    if (!e) { e = { importe: 0, kg: 0, ultima: 0 }; aggByClient.set(c, e); }
+    e.importe += imp;
+    e.kg += kg;
+    if (fecha > e.ultima) e.ultima = fecha;
+  }
+
+  const v = vSel.value, d = dSel.value, sc = scSel.value, zona = zSel.value, compra = compraSel.value;
+  const q = buscarInput.value.trim().toLowerCase();
+
+  const rows = [];
+  for (const c of CLIENTES) {
+    if (v && String(c.v) !== v) continue;
+    if (d && c.d !== d) continue;
+    if (sc && c.sc !== sc) continue;
+    if (zona === "fuera" && c.z) continue;
+    if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
+    if (q && !c.n.toLowerCase().includes(q)) continue;
+    const e = aggByClient.get(c.id);
+    const importe = e ? Math.round(e.importe * 100) / 100 : 0;
+    const kg = e ? Math.round(e.kg * 1000) / 1000 : 0;
+    const valor = isKg ? kg : importe;
+    const compro = importe > 0 || kg > 0;
+    if (compra === "si" && !compro) continue;
+    if (compra === "no" && compro) continue;
+    rows.push({ c, importe, kg, valor, compro, ultima: e ? e.ultima : 0 });
+  }
+
+  const totalClientes = rows.length;
+  const compradores = rows.filter(r => r.compro);
+  const total = compradores.reduce((s, r) => s + r.valor, 0);
+  const cobertura = totalClientes ? compradores.length / totalClientes * 100 : 0;
+
+  const conRuta = rows.filter(r => r.c.d !== "Sin ruta / Online");
+  const compradoresConRuta = conRuta.filter(r => r.compro);
+  const coberturaRuta = conRuta.length ? compradoresConRuta.length / conRuta.length * 100 : 0;
+
+  const compradoresSorted = compradores.slice().sort((a,b) => b.valor - a.valor);
+  const top10 = compradoresSorted.slice(0,10).reduce((s,r) => s + r.valor, 0);
+  const top10Pct = total ? top10 / total * 100 : 0;
+  let acum = 0, pareto80n = 0;
+  for (const r of compradoresSorted) {
+    acum += r.valor; pareto80n++;
+    if (total && acum / total * 100 >= 80) break;
+  }
+
+  // tiles
+  const productLabel = productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`;
+  document.getElementById("tiles").innerHTML = [
+    [`${labelMagnitud()} del periodo`, fmtValor(total), productLabel],
+    ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
+    ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
+    ["Clientes en la seleccion actual", totalClientes.toLocaleString("es-AR"), `${compradores.length} compran`],
+  ].map(([label,value,sub]) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`).join("");
+
+  // hallazgos
+  const findings = [];
+  findings.push(`<li><b>${pct(cobertura)} de cobertura</b> sobre los ${totalClientes.toLocaleString("es-AR")} clientes de la seleccion actual (${compradores.length} compran) &mdash; sobre los que tienen ruta de vendedor asignada, la cobertura es <b>${pct(coberturaRuta)}</b>.</li>`);
+  if (total > 0) {
+    findings.push(`<li><b>Concentracion:</b> los 10 clientes mas grandes explican el <b>${pct(top10Pct)}</b> de ${labelMagnitud().toLowerCase()} filtrado(a); hacen falta <b>${pareto80n}</b> de los ${compradores.length} compradores para llegar al 80%.</li>`);
+  }
+  // subcanal top
+  const scMap = new Map();
+  for (const r of rows) {
+    const key = r.c.sc;
+    const e = scMap.get(key) || { total: 0, compran: 0, valor: 0 };
+    e.total++; if (r.compro) { e.compran++; e.valor += r.valor; }
+    scMap.set(key, e);
+  }
+  const scRows = Array.from(scMap.entries()).map(([k,e]) => ({ label:k, total:e.total, compran:e.compran, valor:e.valor, cobertura: e.total? e.compran/e.total*100:0 })).sort((a,b)=>b.valor-a.valor);
+  if (scRows.length && total > 0) {
+    const top = scRows[0];
+    findings.push(`<li><b>${esc(top.label)}</b> es el subcanal que mas aporta en esta seleccion (${fmtValor(top.valor)}, ${pct(top.valor/total*100)} del total) con ${pct(top.cobertura)} de cobertura sobre ${top.total} clientes.</li>`);
+    const masGrande = scRows.slice().sort((a,b)=>b.total-a.total)[0];
+    if (masGrande.label !== top.label) {
+      findings.push(`<li><b>${esc(masGrande.label)}</b> es el subcanal con mas clientes en la seleccion (${masGrande.total}) con ${pct(masGrande.cobertura)} de cobertura.</li>`);
+    }
+  }
+  // vendedor
+  const vMap = new Map();
+  for (const r of rows) {
+    if (r.c.v == null) continue;
+    const key = r.c.v;
+    const e = vMap.get(key) || { nombre: r.c.vn, total: 0, compran: 0, valor: 0 };
+    e.total++; if (r.compro) { e.compran++; e.valor += r.valor; }
+    vMap.set(key, e);
+  }
+  const vRows = Array.from(vMap.values()).map(e => ({ ...e, cobertura: e.total? e.compran/e.total*100:0 }));
+  if (vRows.length > 1) {
+    const bestCov = vRows.slice().sort((a,b)=>b.cobertura-a.cobertura)[0];
+    const worstCov = vRows.slice().sort((a,b)=>a.cobertura-b.cobertura)[0];
+    findings.push(`<li><b>Entre vendedores:</b> ${esc(bestCov.nombre)} tiene la mejor cobertura (${pct(bestCov.cobertura)} de ${bestCov.total} clientes)${worstCov.nombre!==bestCov.nombre ? `, ${esc(worstCov.nombre)} la mas baja (${pct(worstCov.cobertura)} de ${worstCov.total}).` : "."}</li>`);
+  }
+  document.getElementById("findings").innerHTML = findings.join("\n");
+
+  // pareto chart
+  document.getElementById("chart-pareto").innerHTML = paretoSVG(compradoresSorted, total);
+
+  // subcanal chart
+  const subcanalBarRows = scRows.map(s => ({ label: s.label, value: s.valor, valueLabel: `${fmtValor(s.valor)} &middot; ${pct(s.cobertura)} cobertura (${s.compran}/${s.total})` }));
+  document.getElementById("chart-subcanal").innerHTML = barsSVG(subcanalBarRows, { maxRows: 12, padR: 230, ariaLabel: "Cobertura por subcanal" });
+
+  // vendedor chart (escala fija 0-100%)
+  const vendedorBarRows = vRows.slice().sort((a,b)=>b.cobertura-a.cobertura).map(vr => ({ label: vr.nombre, value: vr.cobertura, valueLabel: `${pct(vr.cobertura)} &middot; ${vr.compran}/${vr.total} cli.` }));
+  document.getElementById("chart-vendedor").innerHTML = barsSVG(vendedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por vendedor" });
+
+  // contexto para impresion
+  const productNames = Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean);
+  const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
+  const mesesTxt = Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno";
+  const filtrosTxt = [
+    v ? `Vendedor: V${v} - ${esc(vendedoresSet.get(Number(v)))}` : null,
+    d ? `Dia: ${esc(d)}` : null,
+    sc ? `Subcanal: ${esc(sc)}` : null,
+    zona === "Zona Paulina" ? "Zona: Zona Paulina" : (zona === "fuera" ? "Zona: Fuera de Zona Paulina" : null),
+    compra === "si" ? "Solo compran" : (compra === "no" ? "Solo no compran" : null),
+    q ? `Busqueda: "${esc(q)}"` : null,
+  ].filter(Boolean).join(" &middot; ");
+  document.getElementById("print-context").innerHTML = `
+    <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
+    <div><b>Meses:</b> ${mesesTxt}${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
+    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado __FECHA_GENERADO__</div>
+  `;
+
+  // resumen + tabla
+  document.getElementById("summary-row").innerHTML = `
+    <div class="chip"><b>${totalClientes.toLocaleString("es-AR")}</b> clientes</div>
+    <div class="chip"><b>${compradores.length.toLocaleString("es-AR")}</b> compran</div>
+    <div class="chip">cobertura <b>${pct(cobertura)}</b></div>
+    <div class="chip">${labelMagnitud().toLowerCase()} <b>${fmtValor(total)}</b></div>
+  `;
+
+  const sortedRows = rows.slice().sort((a,b) => (b.compro-a.compro) || (b.valor-a.valor) || a.c.n.localeCompare(b.c.n));
+  const MAX_RENDER = 1600;
+  document.getElementById("table-body").innerHTML = sortedRows.slice(0, MAX_RENDER).map(r => {
+    const c = r.c;
+    const fechaStr = r.ultima ? String(r.ultima).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3") : "-";
+    return `<tr>
+      <td class="name-cell">${esc(c.n)}</td>
+      <td>${esc(c.loc)}</td>
+      <td class="zone-tag">${c.z ? esc(c.z) : "-"}</td>
+      <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td>
+      <td>${esc(c.d)}</td>
+      <td>${esc(c.sc)}</td>
+      <td>${r.compro ? '<span class="badge yes">&#10003; Si compra</span>' : '<span class="badge no">&#10007; No compra</span>'}</td>
+      <td>${r.compro ? fmtValor(r.valor) : "-"}</td>
+      <td>${fechaStr}</td>
+    </tr>`;
+  }).join("");
+}
+
+render();
+</script>
+</body>
+</html>
