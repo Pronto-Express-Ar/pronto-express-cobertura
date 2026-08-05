@@ -150,6 +150,11 @@
   }
   .pill-toggles input[type="radio"]:checked ~ span,
   .pill-toggles label:has(input:checked) { border-color: var(--series-1); background: var(--series-1-wash); }
+  #subcanal-toggles label { width: 100%; }
+  .filters input[type="date"] {
+    font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
 
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
   .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px; }
@@ -273,6 +278,13 @@
         <div class="pill-toggles" id="month-toggles"></div>
       </div>
       <div class="filter-group">
+        <label for="f-fecha">O un dia exacto (opcional, pisa los meses)</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="date" id="f-fecha" style="flex:1">
+          <button class="btn-link" id="clear-fecha" type="button" title="Quitar filtro de dia">&times;</button>
+        </div>
+      </div>
+      <div class="filter-group">
         <label for="f-zona">Zona</label>
         <select id="f-zona">
           <option value="">Todas</option>
@@ -294,8 +306,8 @@
         </select>
       </div>
       <div class="filter-group">
-        <label for="f-subcanal">Subcanal MKT</label>
-        <select id="f-subcanal"><option value="">Todos</option></select>
+        <label>Subcanal MKT <span style="font-weight:400">(combina los que tildes)</span></label>
+        <div class="pill-toggles" id="subcanal-toggles" style="flex-direction:column;flex-wrap:nowrap;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
       </div>
       <div class="filter-group">
         <label for="f-compra">Compra</label>
@@ -397,6 +409,8 @@ ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 const state = {
   productIds: new Set(ART_BY_ID.has(440669) ? [440669] : []),
   months: new Set(MESES.map(m => m.key)),
+  dia: null,
+  subcanales: new Set(),
   metric: "money",
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
@@ -521,12 +535,17 @@ Array.from(vendedoresSet.entries()).sort((a,b)=>a[0]-b[0]).forEach(([num, nombre
   opt.value = num; opt.textContent = `V${num} - ${nombre}`;
   vSel.appendChild(opt);
 });
-const scSel = document.getElementById("f-subcanal");
+const subcanalEl = document.getElementById("subcanal-toggles");
 Array.from(new Set(CLIENTES.map(c => c.sc))).sort().forEach(sc => {
-  const opt = document.createElement("option");
-  opt.value = sc; opt.textContent = sc;
-  scSel.appendChild(opt);
+  const lbl = document.createElement("label");
+  lbl.innerHTML = `<input type="checkbox" class="f-subcanal" value="${esc(sc)}"> ${esc(sc)}`;
+  subcanalEl.appendChild(lbl);
 });
+const subcanalChecks = document.querySelectorAll(".f-subcanal");
+subcanalChecks.forEach(cb => cb.addEventListener("change", () => {
+  state.subcanales = new Set(Array.from(subcanalChecks).filter(c => c.checked).map(c => c.value));
+  render();
+}));
 
 const dSel = document.getElementById("f-dia");
 const zSel = document.getElementById("f-zona");
@@ -534,6 +553,16 @@ const compraSel = document.getElementById("f-compra");
 const buscarInput = document.getElementById("f-buscar");
 const mesChecks = document.querySelectorAll(".f-mes");
 const metricRadios = document.querySelectorAll('input[name="f-metric"]');
+const fechaInput = document.getElementById("f-fecha");
+
+// limites del selector de fecha, calculados de los datos reales
+let fechaMin = null, fechaMax = null;
+VENTAS.forEach(row => {
+  const f = row[2];
+  if (!fechaMin || f < fechaMin) fechaMin = f;
+  if (!fechaMax || f > fechaMax) fechaMax = f;
+});
+if (fechaMin) { fechaInput.min = fechaMin; fechaInput.max = fechaMax; }
 
 mesChecks.forEach(cb => cb.addEventListener("change", () => {
   state.months = new Set(Array.from(mesChecks).filter(c => c.checked).map(c => c.value));
@@ -542,6 +571,17 @@ mesChecks.forEach(cb => cb.addEventListener("change", () => {
 metricRadios.forEach(r => r.addEventListener("change", () => {
   if (r.checked) { state.metric = r.value; render(); }
 }));
+fechaInput.addEventListener("change", () => {
+  state.dia = fechaInput.value || null;
+  mesChecks.forEach(cb => cb.disabled = !!state.dia);
+  render();
+});
+document.getElementById("clear-fecha").addEventListener("click", () => {
+  fechaInput.value = "";
+  state.dia = null;
+  mesChecks.forEach(cb => cb.disabled = false);
+  render();
+});
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
 
@@ -626,26 +666,32 @@ function render() {
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
 
-  // agregado por cliente segun productos+meses seleccionados
+  // agregado por cliente segun productos + (dia exacto O meses) seleccionados
   const aggByClient = new Map();
   for (const row of VENTAS) {
-    const [c, a, m, imp, kg, fecha] = row;
-    if (!productIds.has(a) || !months.has(m)) continue;
+    const [c, a, fecha, imp, kg] = row;
+    if (!productIds.has(a)) continue;
+    if (state.dia) {
+      if (fecha !== state.dia) continue;
+    } else if (!months.has(fecha.slice(0, 7))) {
+      continue;
+    }
     let e = aggByClient.get(c);
-    if (!e) { e = { importe: 0, kg: 0, ultima: 0 }; aggByClient.set(c, e); }
+    if (!e) { e = { importe: 0, kg: 0, ultima: "" }; aggByClient.set(c, e); }
     e.importe += imp;
     e.kg += kg;
     if (fecha > e.ultima) e.ultima = fecha;
   }
 
-  const v = vSel.value, d = dSel.value, sc = scSel.value, zona = zSel.value, compra = compraSel.value;
+  const v = vSel.value, d = dSel.value, zona = zSel.value, compra = compraSel.value;
+  const subcanales = state.subcanales;
   const q = buscarInput.value.trim().toLowerCase();
 
   const rows = [];
   for (const c of CLIENTES) {
     if (v && String(c.v) !== v) continue;
     if (d && c.d !== d) continue;
-    if (sc && c.sc !== sc) continue;
+    if (subcanales.size && !subcanales.has(c.sc)) continue;
     if (zona === "fuera" && c.z) continue;
     if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
     if (q && !c.n.toLowerCase().includes(q)) continue;
@@ -740,18 +786,20 @@ function render() {
   // contexto para impresion
   const productNames = Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean);
   const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
-  const mesesTxt = Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno";
+  const periodoTxt = state.dia
+    ? `Dia exacto: ${state.dia}`
+    : `Meses: ${Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno"}`;
   const filtrosTxt = [
     v ? `Vendedor: V${v} - ${esc(vendedoresSet.get(Number(v)))}` : null,
-    d ? `Dia: ${esc(d)}` : null,
-    sc ? `Subcanal: ${esc(sc)}` : null,
+    d ? `Dia de ruta: ${esc(d)}` : null,
+    subcanales.size ? `Subcanal: ${esc(Array.from(subcanales).join(", "))}` : null,
     zona === "Zona Paulina" ? "Zona: Zona Paulina" : (zona === "fuera" ? "Zona: Fuera de Zona Paulina" : null),
     compra === "si" ? "Solo compran" : (compra === "no" ? "Solo no compran" : null),
     q ? `Busqueda: "${esc(q)}"` : null,
   ].filter(Boolean).join(" &middot; ");
   document.getElementById("print-context").innerHTML = `
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
-    <div><b>Meses:</b> ${mesesTxt}${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
+    <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
     <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado __FECHA_GENERADO__</div>
   `;
 
@@ -767,7 +815,7 @@ function render() {
   const MAX_RENDER = 1600;
   document.getElementById("table-body").innerHTML = sortedRows.slice(0, MAX_RENDER).map(r => {
     const c = r.c;
-    const fechaStr = r.ultima ? String(r.ultima).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3") : "-";
+    const fechaStr = r.ultima || "-";
     return `<tr>
       <td class="name-cell">${esc(c.n)}</td>
       <td>${esc(c.loc)}</td>

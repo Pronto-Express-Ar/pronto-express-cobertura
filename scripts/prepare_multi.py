@@ -175,11 +175,13 @@ print("Articulos catalogo:", len(articulos_out))
 with open(f"{DATA_DIR}/articulos_multi.json", "w", encoding="utf-8") as f:
     json.dump(articulos_out, f, ensure_ascii=False)
 
-# ---------- Ventas agregadas por cliente x articulo x mes ----------
+# ---------- Ventas agregadas por cliente x articulo x dia exacto ----------
+# Granularidad diaria (no solo mensual) para poder filtrar por un dia puntual
+# en el panel; los meses para los checkboxes se derivan de estas fechas.
 ventas = json.load(open(f"{DATA_DIR}/ventas.json", encoding="utf-8"))
 print("Lineas de venta totales cargadas:", len(ventas))
 
-agg = {}  # (idc, ida, mesKey) -> {imp, kg, fecha_max}
+agg = {}  # (idc, ida, fecha "YYYY-MM-DD") -> {imp, kg}
 clientes_ids = set(clientes_out.keys())
 meses_vistos = {}  # "YYYY-MM" -> (year, month)
 
@@ -191,7 +193,7 @@ for v in ventas:
         continue
     ida = v.get("idArticulo")
     fecha = v.get("fechaComprobate") or ""
-    if len(fecha) < 7:
+    if len(fecha) < 10:
         continue
     mes_key = fecha[0:7]  # "YYYY-MM"
     year, mes_num = int(fecha[0:4]), int(fecha[5:7])
@@ -206,23 +208,20 @@ for v in ventas:
     # estandar del articulo, ya calculado por el ERP en unimedtotal.
     kg = peso_total if peso_total else unimedtotal
 
-    key = (idc, ida, mes_key)
-    e = agg.setdefault(key, {"imp": 0.0, "kg": 0.0, "fecha_max": ""})
+    key = (idc, ida, fecha)
+    e = agg.setdefault(key, {"imp": 0.0, "kg": 0.0})
     e["imp"] += importe
     e["kg"] += kg
-    if v.get("dsDocumento") == "FACTURA" and fecha > e["fecha_max"]:
-        e["fecha_max"] = fecha
 
 rows = []
-for (idc, ida, mes_key), e in agg.items():
+for (idc, ida, fecha), e in agg.items():
     imp = round(e["imp"], 2)
     kg = round(e["kg"], 3)
     if imp == 0 and kg == 0:
         continue
-    fecha_int = int(e["fecha_max"].replace("-", "")) if e["fecha_max"] else 0
-    rows.append([idc, ida, mes_key, imp, kg, fecha_int])
+    rows.append([idc, ida, fecha, imp, kg])
 
-print("Filas agregadas cliente x articulo x mes:", len(rows))
+print("Filas agregadas cliente x articulo x dia:", len(rows))
 with open(f"{DATA_DIR}/ventas_agg_multi.json", "w", encoding="utf-8") as f:
     json.dump(rows, f, ensure_ascii=False)
 
