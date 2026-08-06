@@ -361,7 +361,10 @@
     <div class="card" id="client-detail-card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
         <h2 style="margin:0">Detalle cliente por cliente</h2>
-        <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-link btn-print" id="export-btn" type="button">&#128190; Exportar a Excel</button>
+          <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
+        </div>
       </div>
       <div class="print-only" id="print-context"></div>
       <div class="summary-row" id="summary-row"></div>
@@ -415,6 +418,7 @@ const state = {
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
 function labelMagnitud() { return state.metric === "kg" ? "Kilos vendidos" : "Facturacion"; }
+let LAST_EXPORT = null;
 
 /* ---------------- panel de productos ---------------- */
 const groupsEl = document.getElementById("product-groups");
@@ -588,6 +592,44 @@ buscarInput.addEventListener("input", render);
 document.getElementById("print-btn").addEventListener("click", () => {
   document.body.classList.add("print-table-only");
   window.print();
+});
+
+function csvCell(v) {
+  const s = String(v ?? "");
+  return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvRow(cells) { return cells.map(csvCell).join(";"); }
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  if (!LAST_EXPORT) return;
+  const { rows, productNames, periodoTxt, filtrosParts, isKg } = LAST_EXPORT;
+  const lines = [];
+  lines.push(csvRow([`Producto(s): ${productNames.join(", ")}`]));
+  lines.push(csvRow([`Medido en: ${isKg ? "Kilos" : "Dinero"}`]));
+  lines.push(csvRow([[periodoTxt, ...filtrosParts].join(" | ")]));
+  lines.push(csvRow([`Pronto Express - generado __FECHA_GENERADO__`]));
+  lines.push("");
+  lines.push(csvRow(["Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"]));
+  rows.forEach(r => {
+    const c = r.c;
+    const valorNum = r.compro ? r.valor : 0;
+    const valorStr = valorNum.toLocaleString("es-AR", { minimumFractionDigits: isKg ? 1 : 2, maximumFractionDigits: isKg ? 1 : 2 });
+    lines.push(csvRow([
+      c.n, c.loc, c.z || "", c.vn ? `V${c.v} - ${c.vn}` : "", c.d, c.sc,
+      r.compro ? "Si" : "No", valorStr, r.ultima || "",
+    ]));
+  });
+  const csvContent = "﻿" + lines.join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `cobertura_${fecha}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 });
 window.addEventListener("afterprint", () => document.body.classList.remove("print-table-only"));
 
@@ -788,14 +830,15 @@ function render() {
   const periodoTxt = state.dia
     ? `Dia exacto: ${state.dia}`
     : `Meses: ${Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno"}`;
-  const filtrosTxt = [
-    v ? `Vendedor: V${v} - ${esc(vendedoresSet.get(Number(v)))}` : null,
-    d ? `Dia de ruta: ${esc(d)}` : null,
-    subcanales.size ? `Subcanal: ${esc(Array.from(subcanales).join(", "))}` : null,
+  const filtrosParts = [
+    v ? `Vendedor: V${v} - ${vendedoresSet.get(Number(v))}` : null,
+    d ? `Dia de ruta: ${d}` : null,
+    subcanales.size ? `Subcanal: ${Array.from(subcanales).join(", ")}` : null,
     zona === "Zona Paulina" ? "Zona: Zona Paulina" : (zona === "fuera" ? "Zona: Fuera de Zona Paulina" : null),
     compra === "si" ? "Solo compran" : (compra === "no" ? "Solo no compran" : null),
-    q ? `Busqueda: "${esc(q)}"` : null,
-  ].filter(Boolean).join(" &middot; ");
+    q ? `Busqueda: "${q}"` : null,
+  ].filter(Boolean);
+  const filtrosTxt = filtrosParts.map(esc).join(" &middot; ");
   document.getElementById("print-context").innerHTML = `
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
     <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
@@ -827,6 +870,8 @@ function render() {
       <td>${fechaStr}</td>
     </tr>`;
   }).join("");
+
+  LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
 }
 
 render();
