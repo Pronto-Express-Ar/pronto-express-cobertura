@@ -254,7 +254,7 @@
   <aside class="sidebar">
   <div class="card">
     <h2>1. Elegi el producto (o varios) a analizar</h2>
-    <p class="lede" style="margin-bottom:10px">Busca por nombre o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). El resto del panel se recalcula al instante.</p>
+    <p class="lede" style="margin-bottom:10px">Busca por nombre o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
     <div class="product-toolbar">
       <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
       <button class="btn-link" id="clear-products">Limpiar seleccion</button>
@@ -657,11 +657,10 @@ function barsSVG(rows, opts) {
 /* ---------------- calculo principal ---------------- */
 function render() {
   const productIds = state.productIds;
+  const allProducts = productIds.size === 0; // sin seleccion = general (todos los productos)
   const months = state.months;
-  const hasProducts = productIds.size > 0;
-  document.getElementById("results-empty").style.display = hasProducts ? "none" : "block";
-  document.getElementById("results").style.display = hasProducts ? "block" : "none";
-  if (!hasProducts) return;
+  document.getElementById("results-empty").style.display = "none";
+  document.getElementById("results").style.display = "block";
 
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
@@ -670,7 +669,7 @@ function render() {
   const aggByClient = new Map();
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
-    if (!productIds.has(a)) continue;
+    if (!allProducts && !productIds.has(a)) continue;
     if (state.dia) {
       if (fecha !== state.dia) continue;
     } else if (!months.has(fecha.slice(0, 7))) {
@@ -724,7 +723,7 @@ function render() {
   }
 
   // tiles
-  const productLabel = productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`;
+  const productLabel = allProducts ? `General &mdash; los ${ARTICULOS.length} articulos del catalogo` : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`);
   document.getElementById("tiles").innerHTML = [
     [`${labelMagnitud()} del periodo`, fmtValor(total), productLabel],
     ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
@@ -784,7 +783,7 @@ function render() {
   document.getElementById("chart-vendedor").innerHTML = barsSVG(vendedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por vendedor" });
 
   // contexto para impresion
-  const productNames = Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean);
+  const productNames = allProducts ? [`General (todos los ${ARTICULOS.length} articulos)`] : Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean);
   const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
   const periodoTxt = state.dia
     ? `Dia exacto: ${state.dia}`
