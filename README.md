@@ -1,4 +1,4 @@
-# Panel de Cobertura de Producto — Pronto Express
+# Panel de Cobertura de Producto — Pronto Express 
 
 `index.html` es un panel interactivo (sin backend) que muestra, para el/los
 producto(s) que elijas, qué clientes compran y cuáles no — filtrable por
