@@ -114,6 +114,10 @@
     flex: 1; min-width: 220px; font: inherit; font-size: 13.5px; padding: 9px 12px;
     border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
   }
+  .product-toolbar select {
+    font: inherit; font-size: 13.5px; padding: 9px 12px; min-width: 170px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+  }
   .selected-chip {
     display: inline-flex; align-items: center; gap: 6px; background: var(--chip-bg);
     border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px 5px 12px; font-size: 12.5px;
@@ -260,9 +264,10 @@
   <aside class="sidebar">
   <div class="card">
     <h2>1. Elegi el producto (o varios) a analizar</h2>
-    <p class="lede" style="margin-bottom:10px">Busca por nombre o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
+    <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor (marca) o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
     <div class="product-toolbar">
       <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
+      <select id="product-marca"><option value="">Todos los proveedores</option></select>
       <button class="btn-link" id="clear-products">Limpiar seleccion</button>
     </div>
     <div id="selected-chips"></div>
@@ -439,10 +444,19 @@ Object.keys(LINEAS).sort().forEach(linea => {
     const row = document.createElement("div");
     row.className = "line-row";
     row.dataset.name = a.n.toLowerCase();
+    row.dataset.marca = (a.m || "").toLowerCase();
     row.innerHTML = `<input type="checkbox" class="product-check" data-id="${a.id}" ${state.productIds.has(a.id) ? "checked" : ""}><label>${esc(a.n)}</label>`;
     det.appendChild(row);
   });
   groupsEl.appendChild(det);
+});
+
+const marcaSelectEl = document.getElementById("product-marca");
+Array.from(new Set(ARTICULOS.map(a => (a.m || "").trim()).filter(Boolean))).sort().forEach(m => {
+  const opt = document.createElement("option");
+  opt.value = m.toLowerCase();
+  opt.textContent = m;
+  marcaSelectEl.appendChild(opt);
 });
 
 function syncLineCheckboxes() {
@@ -459,7 +473,10 @@ function syncLineCheckboxes() {
 function renderChips() {
   const wrap = document.getElementById("selected-chips");
   if (state.productIds.size === 0) {
-    wrap.innerHTML = '<span style="color:var(--text-muted);font-size:12.5px">Ningun producto seleccionado</span>';
+    const marca = marcaSelectEl.value;
+    wrap.innerHTML = marca
+      ? `<span style="color:var(--text-muted);font-size:12.5px">Ningun articulo tildado &mdash; mostrando el <b>general de ${esc(marcaSelectEl.selectedOptions[0].textContent)}</b></span>`
+      : '<span style="color:var(--text-muted);font-size:12.5px">Ningun producto seleccionado</span>';
     return;
   }
   wrap.innerHTML = Array.from(state.productIds).map(id => {
@@ -476,14 +493,12 @@ groupsEl.addEventListener("change", (e) => {
     renderChips();
     render();
   } else if (e.target.classList.contains("line-check")) {
-    const linea = e.target.dataset.linea;
-    const boxes = LINEAS[linea] || [];
-    boxes.forEach(a => {
-      if (e.target.checked) state.productIds.add(a.id); else state.productIds.delete(a.id);
-    });
-    groupsEl.querySelectorAll(`.product-check`).forEach(cb => {
-      const a = ART_BY_ID.get(Number(cb.dataset.id));
-      if (a && a.l === linea) cb.checked = e.target.checked;
+    const det = e.target.closest("details");
+    const boxes = Array.from(det.querySelectorAll(".line-row:not(.hidden) input.product-check"));
+    boxes.forEach(cb => {
+      const id = Number(cb.dataset.id);
+      if (e.target.checked) state.productIds.add(id); else state.productIds.delete(id);
+      cb.checked = e.target.checked;
     });
     renderChips();
     render();
@@ -510,19 +525,29 @@ document.getElementById("clear-products").addEventListener("click", () => {
   render();
 });
 
-document.getElementById("product-search").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
+function applyProductFilter() {
+  const q = document.getElementById("product-search").value.trim().toLowerCase();
+  const marca = marcaSelectEl.value;
   groupsEl.querySelectorAll("details").forEach(det => {
     const linea = det.dataset.linea;
-    let anyMatch = linea.includes(q);
+    const lineaMatchesQ = linea.includes(q);
+    let anyMatch = false;
     det.querySelectorAll(".line-row").forEach(row => {
-      const match = q === "" || row.dataset.name.includes(q) || linea.includes(q);
+      const matchQ = q === "" || row.dataset.name.includes(q) || lineaMatchesQ;
+      const matchMarca = marca === "" || row.dataset.marca === marca;
+      const match = matchQ && matchMarca;
       row.classList.toggle("hidden", !match);
       if (match) anyMatch = true;
     });
     det.classList.toggle("group-hidden", !anyMatch);
-    if (q !== "" && anyMatch) det.open = true;
+    if ((q !== "" || marca !== "") && anyMatch) det.open = true;
   });
+}
+document.getElementById("product-search").addEventListener("input", applyProductFilter);
+marcaSelectEl.addEventListener("change", () => {
+  applyProductFilter();
+  renderChips();
+  render();
 });
 
 syncLineCheckboxes();
@@ -705,7 +730,12 @@ function barsSVG(rows, opts) {
 /* ---------------- calculo principal ---------------- */
 function render() {
   const productIds = state.productIds;
-  const allProducts = productIds.size === 0; // sin seleccion = general (todos los productos)
+  const marcaFiltro = marcaSelectEl.value; // solo aplica al alcance cuando no hay productos tildados
+  const marcaNombre = marcaFiltro ? marcaSelectEl.selectedOptions[0].textContent : "";
+  const marcaArticleIds = (productIds.size === 0 && marcaFiltro)
+    ? new Set(ARTICULOS.filter(a => (a.m || "").toLowerCase() === marcaFiltro).map(a => a.id))
+    : null;
+  const allProducts = productIds.size === 0 && !marcaArticleIds; // sin seleccion ni proveedor = general (todo el catalogo)
   const months = state.months;
   document.getElementById("results-empty").style.display = "none";
   document.getElementById("results").style.display = "block";
@@ -717,7 +747,10 @@ function render() {
   const aggByClient = new Map();
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
-    if (!allProducts && !productIds.has(a)) continue;
+    if (!allProducts) {
+      const inScope = productIds.size ? productIds.has(a) : (marcaArticleIds && marcaArticleIds.has(a));
+      if (!inScope) continue;
+    }
     if (state.dia) {
       if (fecha !== state.dia) continue;
     } else if (!months.has(fecha.slice(0, 7))) {
@@ -771,7 +804,11 @@ function render() {
   }
 
   // tiles
-  const productLabel = allProducts ? `General &mdash; los ${ARTICULOS.length} articulos del catalogo` : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`);
+  const productLabel = allProducts
+    ? `General &mdash; los ${ARTICULOS.length} articulos del catalogo`
+    : (productIds.size === 0
+        ? `General de ${esc(marcaNombre)} &mdash; ${marcaArticleIds.size} articulos`
+        : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`));
   document.getElementById("tiles").innerHTML = [
     [`${labelMagnitud()} del periodo`, fmtValor(total), productLabel],
     ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
@@ -831,7 +868,11 @@ function render() {
   document.getElementById("chart-vendedor").innerHTML = barsSVG(vendedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por vendedor" });
 
   // contexto para impresion
-  const productNames = allProducts ? [`General (todos los ${ARTICULOS.length} articulos)`] : Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean);
+  const productNames = allProducts
+    ? [`General (todos los ${ARTICULOS.length} articulos)`]
+    : (productIds.size === 0
+        ? [`General de ${marcaNombre} (${marcaArticleIds.size} articulos)`]
+        : Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean));
   const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
   const periodoTxt = state.dia
     ? `Dia exacto: ${state.dia}`
