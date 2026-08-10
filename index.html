@@ -228,21 +228,33 @@
     body.print-table-only .layout { display: block !important; }
     body.print-table-only .sidebar { display: none !important; }
     body.print-table-only #results-empty,
-    body.print-table-only .main > .tiles,
-    body.print-table-only .main > .card:not(#client-detail-card) { display: none !important; }
+    body.print-table-only .main #results > .tiles,
+    body.print-table-only .main #results > .card:not(#client-detail-card) { display: none !important; }
     body.print-table-only #client-detail-card { border: none !important; padding: 0 !important; }
     body.print-table-only .btn-print { display: none !important; }
-    body.print-table-only .print-only { display: block; margin-bottom: 10px; font-size: 12px; color: #333; }
     body.print-table-only .foot-note { display: none !important; }
     body.print-table-only .table-scroll { max-height: none !important; overflow: visible !important; border: none !important; }
     body.print-table-only table.data-table th { position: static !important; }
-    body.print-table-only .viz-root, body.print-table-only .viz-root * {
-      background: #fff !important; color: #000 !important; box-shadow: none !important;
-    }
     body.print-table-only .badge.yes { border: 1px solid #0ca30c; color: #0ca30c !important; }
     body.print-table-only .badge.no { border: 1px solid #d03b3b; color: #d03b3b !important; }
     body.print-table-only table.data-table td, body.print-table-only table.data-table th { border-bottom: 1px solid #ccc !important; }
     body.print-table-only table.data-table tr { break-inside: avoid; }
+
+    body.print-no-detail .viz-root { background: #fff !important; }
+    body.print-no-detail .layout { display: block !important; }
+    body.print-no-detail .sidebar { display: none !important; }
+    body.print-no-detail #results-empty,
+    body.print-no-detail #client-detail-card { display: none !important; }
+    body.print-no-detail .btn-print { display: none !important; }
+    body.print-no-detail .foot-note { display: none !important; }
+    body.print-no-detail .card { break-inside: avoid; }
+
+    body.print-table-only .print-only,
+    body.print-no-detail .print-only { display: block; margin-bottom: 10px; font-size: 12px; color: #333; }
+    body.print-table-only .viz-root, body.print-table-only .viz-root *,
+    body.print-no-detail .viz-root, body.print-no-detail .viz-root * {
+      background: #fff !important; color: #000 !important; box-shadow: none !important;
+    }
   }
 </style>
 </head>
@@ -268,8 +280,11 @@
     <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor (marca) o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
     <div class="product-toolbar">
       <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
-      <select id="product-marca"><option value="">Todos los proveedores</option></select>
       <button class="btn-link" id="clear-products">Limpiar seleccion</button>
+    </div>
+    <div class="filter-group" style="margin-bottom:10px">
+      <label>Proveedor (marca) <span style="font-weight:400">(tilda 1 o mas)</span></label>
+      <div class="pill-toggles" id="marca-toggles" style="flex-direction:column;flex-wrap:nowrap;max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
     </div>
     <div id="selected-chips"></div>
     <div class="product-groups" id="product-groups"></div>
@@ -330,8 +345,8 @@
         </select>
       </div>
       <div class="filter-group">
-        <label for="f-buscar">Buscar cliente</label>
-        <input type="text" id="f-buscar" placeholder="Nombre del cliente...">
+        <label for="f-buscar">Buscar cliente (nombre o codigo)</label>
+        <input type="text" id="f-buscar" placeholder="Nombre o codigo del cliente...">
       </div>
     </div>
   </div>
@@ -345,6 +360,7 @@
 
   <div id="results">
 
+    <div class="print-only" id="print-context"></div>
     <div class="tiles" id="tiles"></div>
 
     <div class="card">
@@ -373,18 +389,18 @@
     <div class="card" id="client-detail-card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
         <h2 style="margin:0">Detalle cliente por cliente</h2>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-link btn-print" id="export-btn" type="button">&#128190; Exportar a Excel</button>
           <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
+          <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
         </div>
       </div>
-      <div class="print-only" id="print-context"></div>
       <div class="summary-row" id="summary-row"></div>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
+              <th>Codigo</th><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
               <th>Subcanal MKT</th><th>Compra</th><th id="th-valor">Importe periodo</th><th>Ultima compra</th>
             </tr>
           </thead>
@@ -426,10 +442,11 @@ ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 
 /* ---------------- estado ---------------- */
 const state = {
-  productIds: new Set(ART_BY_ID.has(440669) ? [440669] : []),
+  productIds: new Set(),
   months: new Set(MESES.map(m => m.key)),
   dia: null,
   subcanales: new Set(),
+  marcas: new Set(),
   metric: "money",
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
@@ -456,13 +473,19 @@ Object.keys(LINEAS).sort().forEach(linea => {
   groupsEl.appendChild(det);
 });
 
-const marcaSelectEl = document.getElementById("product-marca");
+const marcaToggleEl = document.getElementById("marca-toggles");
+const MARCAS_ORIGINAL = new Map();
 Array.from(new Set(ARTICULOS.map(a => (a.m || "").trim()).filter(Boolean))).sort().forEach(m => {
-  const opt = document.createElement("option");
-  opt.value = m.toLowerCase();
-  opt.textContent = m;
-  marcaSelectEl.appendChild(opt);
+  const key = m.toLowerCase();
+  MARCAS_ORIGINAL.set(key, m);
+  const lbl = document.createElement("label");
+  lbl.innerHTML = `<input type="checkbox" class="f-marca" value="${esc(key)}"> ${esc(m)}`;
+  marcaToggleEl.appendChild(lbl);
 });
+const marcaChecks = document.querySelectorAll(".f-marca");
+function marcasLabel() {
+  return Array.from(state.marcas).map(k => MARCAS_ORIGINAL.get(k) || k).join(", ");
+}
 
 function syncLineCheckboxes() {
   document.querySelectorAll(".line-check").forEach(lc => {
@@ -478,9 +501,8 @@ function syncLineCheckboxes() {
 function renderChips() {
   const wrap = document.getElementById("selected-chips");
   if (state.productIds.size === 0) {
-    const marca = marcaSelectEl.value;
-    wrap.innerHTML = marca
-      ? `<span style="color:var(--text-muted);font-size:12.5px">Ningun articulo tildado &mdash; mostrando el <b>general de ${esc(marcaSelectEl.selectedOptions[0].textContent)}</b></span>`
+    wrap.innerHTML = state.marcas.size
+      ? `<span style="color:var(--text-muted);font-size:12.5px">Ningun articulo tildado &mdash; mostrando el <b>general de ${esc(marcasLabel())}</b></span>`
       : '<span style="color:var(--text-muted);font-size:12.5px">Ningun producto seleccionado</span>';
     return;
   }
@@ -532,28 +554,29 @@ document.getElementById("clear-products").addEventListener("click", () => {
 
 function applyProductFilter() {
   const q = document.getElementById("product-search").value.trim().toLowerCase();
-  const marca = marcaSelectEl.value;
+  const marcas = state.marcas;
   groupsEl.querySelectorAll("details").forEach(det => {
     const linea = det.dataset.linea;
     const lineaMatchesQ = linea.includes(q);
     let anyMatch = false;
     det.querySelectorAll(".line-row").forEach(row => {
       const matchQ = q === "" || row.dataset.name.includes(q) || lineaMatchesQ;
-      const matchMarca = marca === "" || row.dataset.marca === marca;
+      const matchMarca = marcas.size === 0 || marcas.has(row.dataset.marca);
       const match = matchQ && matchMarca;
       row.classList.toggle("hidden", !match);
       if (match) anyMatch = true;
     });
     det.classList.toggle("group-hidden", !anyMatch);
-    if ((q !== "" || marca !== "") && anyMatch) det.open = true;
+    if ((q !== "" || marcas.size > 0) && anyMatch) det.open = true;
   });
 }
 document.getElementById("product-search").addEventListener("input", applyProductFilter);
-marcaSelectEl.addEventListener("change", () => {
+marcaChecks.forEach(cb => cb.addEventListener("change", () => {
+  state.marcas = new Set(Array.from(marcaChecks).filter(c => c.checked).map(c => c.value));
   applyProductFilter();
   renderChips();
   render();
-});
+}));
 
 syncLineCheckboxes();
 renderChips();
@@ -625,8 +648,15 @@ document.getElementById("clear-fecha").addEventListener("click", () => {
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
 
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("print-table-only", "print-no-detail");
+});
 document.getElementById("print-btn").addEventListener("click", () => {
   document.body.classList.add("print-table-only");
+  window.print();
+});
+document.getElementById("print-panel-btn").addEventListener("click", () => {
+  document.body.classList.add("print-no-detail");
   window.print();
 });
 
@@ -645,13 +675,13 @@ document.getElementById("export-btn").addEventListener("click", () => {
   lines.push(csvRow([[periodoTxt, ...filtrosParts].join(" | ")]));
   lines.push(csvRow([`Pronto Express - generado 10/08/2026`]));
   lines.push("");
-  lines.push(csvRow(["Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"]));
+  lines.push(csvRow(["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"]));
   rows.forEach(r => {
     const c = r.c;
     const valorNum = r.compro ? r.valor : 0;
     const valorStr = valorNum.toLocaleString("es-AR", { minimumFractionDigits: isKg ? 1 : 2, maximumFractionDigits: isKg ? 1 : 2 });
     lines.push(csvRow([
-      c.n, c.loc, c.z || "", c.vn ? `V${c.v} - ${c.vn}` : "", c.d, c.sc,
+      c.id, c.n, c.loc, c.z || "", c.vn ? `V${c.v} - ${c.vn}` : "", c.d, c.sc,
       r.compro ? "Si" : "No", valorStr, r.ultima || "",
     ]));
   });
@@ -735,10 +765,10 @@ function barsSVG(rows, opts) {
 /* ---------------- calculo principal ---------------- */
 function render() {
   const productIds = state.productIds;
-  const marcaFiltro = marcaSelectEl.value; // solo aplica al alcance cuando no hay productos tildados
-  const marcaNombre = marcaFiltro ? marcaSelectEl.selectedOptions[0].textContent : "";
-  const marcaArticleIds = (productIds.size === 0 && marcaFiltro)
-    ? new Set(ARTICULOS.filter(a => (a.m || "").toLowerCase() === marcaFiltro).map(a => a.id))
+  const marcasFiltro = state.marcas; // solo aplica al alcance cuando no hay productos tildados
+  const marcaNombre = marcasFiltro.size ? marcasLabel() : "";
+  const marcaArticleIds = (productIds.size === 0 && marcasFiltro.size)
+    ? new Set(ARTICULOS.filter(a => marcasFiltro.has((a.m || "").toLowerCase())).map(a => a.id))
     : null;
   const allProducts = productIds.size === 0 && !marcaArticleIds; // sin seleccion ni proveedor = general (todo el catalogo)
   const months = state.months;
@@ -779,7 +809,7 @@ function render() {
     if (subcanales.size && !subcanales.has(c.sc)) continue;
     if (zona === "fuera" && c.z) continue;
     if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
-    if (q && !c.n.toLowerCase().includes(q)) continue;
+    if (q && !c.n.toLowerCase().includes(q) && !String(c.id).includes(q)) continue;
     const e = aggByClient.get(c.id);
     const importe = e ? Math.round(e.importe * 100) / 100 : 0;
     const kg = e ? Math.round(e.kg * 1000) / 1000 : 0;
@@ -911,6 +941,7 @@ function render() {
     const c = r.c;
     const fechaStr = r.ultima || "-";
     return `<tr>
+      <td>${c.id}</td>
       <td class="name-cell">${esc(c.n)}</td>
       <td>${esc(c.loc)}</td>
       <td class="zone-tag">${c.z ? esc(c.z) : "-"}</td>
