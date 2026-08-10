@@ -656,44 +656,167 @@ document.getElementById("print-panel-btn").addEventListener("click", () => {
   window.print();
 });
 
-function csvCell(v) {
-  const s = String(v ?? "");
-  return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+/* ---------------- export a xlsx real (celdas numericas de verdad, sumables sin importar el idioma/config regional de Excel) ---------------- */
+function escXml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
-function csvRow(cells) { return cells.map(csvCell).join(";"); }
+function colLetter(i) {
+  let s = "";
+  i++;
+  while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); }
+  return s;
+}
+function xlsxSheetXml(metaLines, headers, dataRows) {
+  const rows = [];
+  let r = 1;
+  metaLines.forEach(line => {
+    rows.push(`<row r="${r}"><c r="A${r}" t="inlineStr"><is><t>${escXml(line)}</t></is></c></row>`);
+    r++;
+  });
+  r++;
+  rows.push(`<row r="${r}">${headers.map((h, i) => `<c r="${colLetter(i)}${r}" t="inlineStr"><is><t>${escXml(h)}</t></is></c>`).join("")}</row>`);
+  r++;
+  dataRows.forEach(row => {
+    const cells = row.map((cell, i) => {
+      const ref = colLetter(i) + r;
+      return cell.t === "n" ? `<c r="${ref}"><v>${cell.v}</v></c>` : `<c r="${ref}" t="inlineStr"><is><t>${escXml(cell.v)}</t></is></c>`;
+    }).join("");
+    rows.push(`<row r="${r}">${cells}</row>`);
+    r++;
+  });
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join("")}</sheetData></worksheet>`;
+}
+let CRC32_TABLE = null;
+function crc32(bytes) {
+  if (!CRC32_TABLE) {
+    CRC32_TABLE = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      CRC32_TABLE[n] = c >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function buildZip(files) {
+  const enc = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  files.forEach(f => {
+    const nameBytes = enc.encode(f.name);
+    const data = f.data;
+    const crc = crc32(data);
+    const size = data.length;
+
+    const local = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(local.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 0x0800, true);
+    dv.setUint16(8, 0, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0x21, true);
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, size, true);
+    dv.setUint32(22, size, true);
+    dv.setUint16(26, nameBytes.length, true);
+    dv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    localParts.push(local, data);
+
+    const central = new Uint8Array(46 + nameBytes.length);
+    const cdv = new DataView(central.buffer);
+    cdv.setUint32(0, 0x02014b50, true);
+    cdv.setUint16(4, 20, true);
+    cdv.setUint16(6, 20, true);
+    cdv.setUint16(8, 0x0800, true);
+    cdv.setUint16(10, 0, true);
+    cdv.setUint16(12, 0, true);
+    cdv.setUint16(14, 0x21, true);
+    cdv.setUint32(16, crc, true);
+    cdv.setUint32(20, size, true);
+    cdv.setUint32(24, size, true);
+    cdv.setUint16(28, nameBytes.length, true);
+    cdv.setUint16(30, 0, true);
+    cdv.setUint16(32, 0, true);
+    cdv.setUint16(34, 0, true);
+    cdv.setUint16(36, 0, true);
+    cdv.setUint32(38, 0, true);
+    cdv.setUint32(42, offset, true);
+    central.set(nameBytes, 46);
+    centralParts.push(central);
+
+    offset += local.length + data.length;
+  });
+  const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+  const centralOffset = offset;
+  const eocd = new Uint8Array(22);
+  const edv = new DataView(eocd.buffer);
+  edv.setUint32(0, 0x06054b50, true);
+  edv.setUint16(8, files.length, true);
+  edv.setUint16(10, files.length, true);
+  edv.setUint32(12, centralSize, true);
+  edv.setUint32(16, centralOffset, true);
+  return new Blob([...localParts, ...centralParts, eocd], { type: "application/zip" });
+}
+function buildXlsx(sheetXml) {
+  const enc = new TextEncoder();
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Detalle" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`;
+  return buildZip([
+    { name: "[Content_Types].xml", data: enc.encode(contentTypes) },
+    { name: "_rels/.rels", data: enc.encode(rootRels) },
+    { name: "xl/workbook.xml", data: enc.encode(workbook) },
+    { name: "xl/_rels/workbook.xml.rels", data: enc.encode(workbookRels) },
+    { name: "xl/styles.xml", data: enc.encode(styles) },
+    { name: "xl/worksheets/sheet1.xml", data: enc.encode(sheetXml) },
+  ]);
+}
 
 document.getElementById("export-btn").addEventListener("click", () => {
   if (!LAST_EXPORT) return;
   const { rows, productNames, periodoTxt, filtrosParts, isKg } = LAST_EXPORT;
-  const lines = [];
-  lines.push(csvRow([`Producto(s): ${productNames.join(", ")}`]));
-  lines.push(csvRow([`Medido en: ${isKg ? "Kilos" : "Dinero"}`]));
-  lines.push(csvRow([[periodoTxt, ...filtrosParts].join(" | ")]));
-  lines.push(csvRow([`Pronto Express - generado __FECHA_GENERADO__`]));
-  lines.push("");
-  lines.push(csvRow(["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"]));
-  rows.forEach(r => {
+  const metaLines = [
+    `Producto(s): ${productNames.join(", ")}`,
+    `Medido en: ${isKg ? "Kilos" : "Dinero"}`,
+    [periodoTxt, ...filtrosParts].join(" | "),
+    `Pronto Express - generado __FECHA_GENERADO__`,
+  ];
+  const headers = ["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"];
+  const dataRows = rows.map(r => {
     const c = r.c;
-    const valorNum = r.compro ? r.valor : 0;
-    const valorStr = valorNum.toLocaleString("es-AR", { minimumFractionDigits: isKg ? 1 : 2, maximumFractionDigits: isKg ? 1 : 2 });
-    lines.push(csvRow([
-      c.id, c.n, c.loc, c.z || "", c.vn ? `V${c.v} - ${c.vn}` : "", c.d, c.sc,
-      r.compro ? "Si" : "No", valorStr, r.ultima || "",
-    ]));
+    const valorNum = r.compro ? Math.round(r.valor * 100) / 100 : 0;
+    return [
+      { t: "n", v: c.id },
+      { t: "s", v: c.n },
+      { t: "s", v: c.loc },
+      { t: "s", v: c.z || "" },
+      { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
+      { t: "s", v: c.d },
+      { t: "s", v: c.sc },
+      { t: "s", v: r.compro ? "Si" : "No" },
+      { t: "n", v: valorNum },
+      { t: "s", v: r.ultima || "" },
+    ];
   });
-  const csvContent = "﻿" + lines.join("\r\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const sheetXml = xlsxSheetXml(metaLines, headers, dataRows);
+  const blob = buildXlsx(sheetXml);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const fecha = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `cobertura_${fecha}.csv`;
+  a.download = `cobertura_${fecha}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
-window.addEventListener("afterprint", () => document.body.classList.remove("print-table-only"));
 
 /* ---------------- SVG charts ---------------- */
 function paretoSVG(compradores, total) {
