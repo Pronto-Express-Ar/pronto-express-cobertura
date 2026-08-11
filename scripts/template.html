@@ -411,7 +411,7 @@
           <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
         </div>
       </div>
-      <p class="lede" style="margin-bottom:10px">Toca un cliente para ver el listado de articulos que compro en el periodo filtrado.</p>
+      <p class="lede" style="margin-bottom:10px">Toca un cliente para ver el listado de articulos que compro en el periodo filtrado. Si tildaste un producto o proveedor a la izquierda, el listado se acota a esos articulos.</p>
       <div class="summary-row" id="summary-row"></div>
       <div class="table-scroll">
         <table class="data-table">
@@ -505,6 +505,12 @@ Array.from(new Set(ARTICULOS.map(a => (a.m || "").trim()).filter(Boolean))).sort
 const marcaChecks = document.querySelectorAll(".f-marca");
 function marcasLabel() {
   return Array.from(state.marcas).map(k => MARCAS_ORIGINAL.get(k) || k).join(", ");
+}
+/* devuelve null si no hay restriccion (general/todo el catalogo), o un Set con los idArticulo permitidos */
+function activeArticleScope() {
+  if (state.productIds.size) return state.productIds;
+  if (state.marcas.size) return new Set(ARTICULOS.filter(a => state.marcas.has((a.m || "").toLowerCase())).map(a => a.id));
+  return null;
 }
 
 function syncLineCheckboxes() {
@@ -670,9 +676,11 @@ buscarInput.addEventListener("input", render);
 
 /* ---------------- detalle de productos por cliente (desplegable en la tabla) ---------------- */
 function clientProductBreakdown(cid) {
+  const scope = activeArticleScope(); // null = todo el catalogo; Set = solo lo que esta filtrado
   const arr = CLIENT_VENTAS_INDEX.get(cid) || [];
   const byArt = new Map();
   arr.forEach(([, ida, fecha, imp, kg]) => {
+    if (scope && !scope.has(ida)) return;
     if (state.dia) {
       if (fecha !== state.dia) return;
     } else if (!state.months.has(fecha.slice(0, 7))) {
@@ -697,7 +705,10 @@ function renderClientProductsRow(cid) {
   const items = clientProductBreakdown(cid);
   const colspan = 10;
   if (items.length === 0) {
-    return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box"><div class="cp-empty">No compro ningun articulo en el periodo seleccionado.</div></div></td></tr>`;
+    const msg = activeArticleScope()
+      ? "No compro ninguno de los articulos filtrados en el periodo seleccionado."
+      : "No compro ningun articulo en el periodo seleccionado.";
+    return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box"><div class="cp-empty">${msg}</div></div></td></tr>`;
   }
   const rowsHtml = items.map(r => `<div class="cp-item"><span class="cp-name">${esc(r.nombre)}</span><span class="cp-val">${fmtValor(r.valor)}</span><span class="cp-date">${esc(r.ultima || "")}</span></div>`).join("");
   return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box">
@@ -961,9 +972,7 @@ function render() {
   const productIds = state.productIds;
   const marcasFiltro = state.marcas; // solo aplica al alcance cuando no hay productos tildados
   const marcaNombre = marcasFiltro.size ? marcasLabel() : "";
-  const marcaArticleIds = (productIds.size === 0 && marcasFiltro.size)
-    ? new Set(ARTICULOS.filter(a => marcasFiltro.has((a.m || "").toLowerCase())).map(a => a.id))
-    : null;
+  const marcaArticleIds = productIds.size === 0 ? activeArticleScope() : null;
   const allProducts = productIds.size === 0 && !marcaArticleIds; // sin seleccion ni proveedor = general (todo el catalogo)
   const months = state.months;
   document.getElementById("results-empty").style.display = "none";
