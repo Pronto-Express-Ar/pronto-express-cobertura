@@ -204,7 +204,23 @@
   table.data-table td { padding: 7px 10px; border-bottom: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
   table.data-table td.name-cell { font-variant-numeric: normal; }
   table.data-table tr:hover td { background: var(--page); }
+  table.data-table tr.client-row { cursor: pointer; }
+  table.data-table tr.client-row.expanded td { background: var(--series-1-wash); }
   .table-scroll { max-height: 520px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+
+  tr.client-products-row td { padding: 0; border-bottom: 1px solid var(--gridline); }
+  .cp-box { padding: 10px 16px 12px 34px; background: var(--page); max-height: 260px; overflow-y: auto; }
+  .cp-empty { font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
+  .cp-head, .cp-item {
+    display: grid; grid-template-columns: 1fr 130px 110px; gap: 10px; align-items: center;
+    padding: 4px 0; font-size: 12.5px;
+  }
+  .cp-head { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--gridline); padding-bottom: 6px; margin-bottom: 4px; }
+  .cp-item { border-bottom: 1px solid var(--gridline); }
+  .cp-item:last-child { border-bottom: none; }
+  .cp-val { font-variant-numeric: tabular-nums; text-align: right; }
+  .cp-date { color: var(--text-muted); text-align: right; }
+  @media print { .client-products-row { display: none !important; } }
 
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
   .badge.yes { color: var(--status-good); background: var(--status-good-bg); }
@@ -395,6 +411,7 @@
           <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
         </div>
       </div>
+      <p class="lede" style="margin-bottom:10px">Toca un cliente para ver el listado de articulos que compro en el periodo filtrado.</p>
       <div class="summary-row" id="summary-row"></div>
       <div class="table-scroll">
         <table class="data-table">
@@ -433,6 +450,13 @@ function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 /* ---------------- indices ---------------- */
 const CLI_BY_ID = new Map(CLIENTES.map(c => [c.id, c]));
 const ART_BY_ID = new Map(ARTICULOS.map(a => [a.id, a]));
+const CLIENT_VENTAS_INDEX = new Map();
+VENTAS.forEach(row => {
+  const cid = row[0];
+  let arr = CLIENT_VENTAS_INDEX.get(cid);
+  if (!arr) { arr = []; CLIENT_VENTAS_INDEX.set(cid, arr); }
+  arr.push(row);
+});
 const LINEAS = {};
 ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 
@@ -643,6 +667,57 @@ document.getElementById("clear-fecha").addEventListener("click", () => {
 });
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
+
+/* ---------------- detalle de productos por cliente (desplegable en la tabla) ---------------- */
+function clientProductBreakdown(cid) {
+  const arr = CLIENT_VENTAS_INDEX.get(cid) || [];
+  const byArt = new Map();
+  arr.forEach(([, ida, fecha, imp, kg]) => {
+    if (state.dia) {
+      if (fecha !== state.dia) return;
+    } else if (!state.months.has(fecha.slice(0, 7))) {
+      return;
+    }
+    let e = byArt.get(ida);
+    if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
+    e.importe += imp;
+    e.kg += kg;
+    if (fecha > e.ultima) e.ultima = fecha;
+  });
+  const isKg = state.metric === "kg";
+  const rows = Array.from(byArt.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    const valor = isKg ? Math.round(e.kg * 1000) / 1000 : Math.round(e.importe * 100) / 100;
+    return { nombre: art ? art.n : "Otros / ajustes (sin articulo)", valor, ultima: e.ultima };
+  }).filter(r => r.valor !== 0);
+  rows.sort((a, b) => b.valor - a.valor);
+  return rows;
+}
+function renderClientProductsRow(cid) {
+  const items = clientProductBreakdown(cid);
+  const colspan = 10;
+  if (items.length === 0) {
+    return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box"><div class="cp-empty">No compro ningun articulo en el periodo seleccionado.</div></div></td></tr>`;
+  }
+  const rowsHtml = items.map(r => `<div class="cp-item"><span class="cp-name">${esc(r.nombre)}</span><span class="cp-val">${fmtValor(r.valor)}</span><span class="cp-date">${esc(r.ultima || "")}</span></div>`).join("");
+  return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box">
+    <div class="cp-head"><span>Producto</span><span>${labelMagnitud()}</span><span>Ultima compra</span></div>
+    ${rowsHtml}
+  </div></td></tr>`;
+}
+document.getElementById("table-body").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr.client-row");
+  if (!tr) return;
+  const cid = Number(tr.dataset.cid);
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("client-products-row") && next.dataset.for === String(cid)) {
+    next.remove();
+    tr.classList.remove("expanded");
+    return;
+  }
+  tr.insertAdjacentHTML("afterend", renderClientProductsRow(cid));
+  tr.classList.add("expanded");
+});
 
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-table-only", "print-no-detail");
@@ -1059,7 +1134,7 @@ function render() {
   document.getElementById("table-body").innerHTML = sortedRows.slice(0, MAX_RENDER).map(r => {
     const c = r.c;
     const fechaStr = r.ultima || "-";
-    return `<tr>
+    return `<tr class="client-row" data-cid="${c.id}" title="Ver que productos compra">
       <td>${c.id}</td>
       <td class="name-cell">${esc(c.n)}</td>
       <td>${esc(c.loc)}</td>
