@@ -322,7 +322,7 @@
     <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
     <div class="product-toolbar">
       <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
-      <button class="btn-link" id="clear-products">Limpiar seleccion</button>
+      <button class="btn-link" id="clear-products">Limpiar todos los filtros</button>
     </div>
     <div class="filter-group" style="margin-bottom:10px">
       <label>Proveedor <span style="font-weight:400">(tilda 1 o mas)</span></label>
@@ -661,10 +661,30 @@ document.getElementById("selected-chips").addEventListener("click", (e) => {
 });
 
 document.getElementById("clear-products").addEventListener("click", () => {
+  // productos + proveedores + busqueda del picker
   state.productIds.clear();
   groupsEl.querySelectorAll(".product-check").forEach(cb => cb.checked = false);
+  state.marcas = new Set();
+  marcaChecks.forEach(cb => cb.checked = false);
+  document.getElementById("product-search").value = "";
   syncLineCheckboxes();
+  applyProductFilter();
   renderChips();
+
+  // resto de los filtros de la barra lateral
+  state.subcanales = new Set();
+  subcanalChecks.forEach(cb => cb.checked = false);
+  vSel.value = "";
+  dSel.value = "";
+  zSel.value = "";
+  compraSel.value = "";
+  buscarInput.value = "";
+  fechaInput.value = "";
+  state.dia = null;
+  mesChecks.forEach(cb => cb.disabled = false);
+  state.months = new Set(MESES.length ? [MESES[MESES.length - 1].key] : []);
+  mesChecks.forEach(cb => cb.checked = state.months.has(cb.value));
+
   render();
 });
 
