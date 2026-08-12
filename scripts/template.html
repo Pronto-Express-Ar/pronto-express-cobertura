@@ -220,6 +220,7 @@
   .cp-item:last-child { border-bottom: none; }
   .cp-val { font-variant-numeric: tabular-nums; text-align: right; }
   .cp-date { color: var(--text-muted); text-align: right; }
+  .cp-hist-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 10px 0 4px; }
   @media print { .client-products-row { display: none !important; } }
 
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
@@ -237,6 +238,31 @@
     color: var(--text-primary); white-space: nowrap;
   }
   .btn-print:hover { background: var(--page); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    font: inherit; font-size: 13.5px; font-weight: 600; padding: 10px 16px; margin-bottom: -1px;
+    border: none; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); cursor: pointer;
+  }
+  .tab-btn:hover { color: var(--text-primary); }
+  .tab-btn.active { color: var(--series-1); border-bottom-color: var(--series-1); }
+
+  .obj-block + .obj-block { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gridline); }
+  .obj-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .obj-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .obj-row:last-child { margin-bottom: 0; }
+  .obj-row-label { width: 90px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
+  .obj-track { flex: 1; height: 18px; border-radius: 9px; background: var(--chip-bg); position: relative; overflow: hidden; }
+  .obj-fill { height: 100%; border-radius: 9px 0 0 9px; background: var(--series-1); }
+  .obj-fill.reached { background: var(--status-good); border-radius: 9px; }
+  .obj-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-primary); opacity: 0.35; }
+  .obj-nums { width: 260px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); text-align: right; }
+  .obj-nums b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  @media (max-width: 720px) {
+    .obj-row { flex-wrap: wrap; }
+    .obj-row-label, .obj-nums { width: auto; }
+    .obj-track { flex-basis: 100%; order: 3; }
+  }
 
   @media print {
     body.print-table-only .viz-root { background: #fff !important; padding: 0 !important; }
@@ -293,14 +319,14 @@
   <aside class="sidebar">
   <div class="card">
     <h2>1. Elegi el producto (o varios) a analizar</h2>
-    <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor (marca) o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
+    <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
     <div class="product-toolbar">
       <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
       <button class="btn-link" id="clear-products">Limpiar seleccion</button>
     </div>
     <div class="filter-group" style="margin-bottom:10px">
-      <label>Proveedor (marca) <span style="font-weight:400">(tilda 1 o mas)</span></label>
-      <div class="pill-toggles" id="marca-toggles" style="flex-direction:column;flex-wrap:nowrap;max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
+      <label>Proveedor <span style="font-weight:400">(tilda 1 o mas)</span></label>
+      <div class="pill-toggles" id="marca-toggles" style="flex-direction:column;flex-wrap:nowrap;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
     </div>
     <div id="selected-chips"></div>
     <div class="product-groups" id="product-groups"></div>
@@ -350,7 +376,7 @@
       </div>
       <div class="filter-group">
         <label>Subcanal MKT <span style="font-weight:400">(combina los que tildes)</span></label>
-        <div class="pill-toggles" id="subcanal-toggles" style="flex-direction:column;flex-wrap:nowrap;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
+        <div class="pill-toggles" id="subcanal-toggles" style="flex-direction:column;flex-wrap:nowrap;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
       </div>
       <div class="filter-group">
         <label for="f-compra">Compra</label>
@@ -370,6 +396,11 @@
 
   <div class="main">
 
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-general" type="button">Vista general</button>
+    <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
+  </div>
+
   <div id="results-empty" class="card" style="display:none">
     <p class="lede">Eleg&iacute; al menos un producto a la izquierda para ver el analisis.</p>
   </div>
@@ -378,6 +409,37 @@
 
     <div class="print-only" id="print-context"></div>
     <div class="tiles" id="tiles"></div>
+
+    <div class="card" id="client-detail-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+        <h2 style="margin:0">Detalle cliente por cliente</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-link btn-print" id="export-btn" type="button">&#128190; Exportar a Excel</button>
+          <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
+          <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom:10px">Toca un cliente para ver el listado de articulos que compro en el periodo filtrado (si no compro, te mostramos lo que compraba habitualmente). Si tildaste un producto o proveedor a la izquierda, el listado se acota a esos articulos.</p>
+      <div class="summary-row" id="summary-row"></div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Codigo</th><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
+              <th>Subcanal MKT</th><th>Compra</th><th id="th-valor">Importe periodo</th><th>Ultima compra</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="objetivo-card">
+      <h2>Objetivo del mes &mdash; +10% vs mes anterior</h2>
+      <p class="lede" style="margin-bottom:14px">Compara el mes en curso (a la fecha) contra el mes anterior completo, con una meta de crecimiento del 10%. No depende de los meses tildados en el filtro: siempre compara el ultimo mes con datos contra el anterior.</p>
+      <div id="objetivo-empresa"></div>
+      <div id="objetivo-vendedor"></div>
+    </div>
 
     <div class="card">
       <h2>Hallazgos</h2>
@@ -397,35 +459,25 @@
     </div>
 
     <div class="card">
+      <h2>Cobertura por proveedor</h2>
+      <p class="lede" style="margin-bottom:14px">De los clientes activos en la seleccion actual (filtros de vendedor/zona/dia/subcanal), cuantos le compran algo a cada proveedor en el periodo &mdash; sin importar el producto/proveedor tildado a la izquierda.</p>
+      <div id="chart-proveedor"></div>
+    </div>
+
+    <div class="card">
       <h2>Cobertura por vendedor</h2>
       <p class="lede" style="margin-bottom:14px">% de clientes de la ruta L-V de cada vendedor (dentro de los filtros activos) que compraron el producto seleccionado al menos una vez.</p>
       <div id="chart-vendedor"></div>
     </div>
 
-    <div class="card" id="client-detail-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-        <h2 style="margin:0">Detalle cliente por cliente</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-link btn-print" id="export-btn" type="button">&#128190; Exportar a Excel</button>
-          <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
-          <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
-        </div>
-      </div>
-      <p class="lede" style="margin-bottom:10px">Toca un cliente para ver el listado de articulos que compro en el periodo filtrado. Si tildaste un producto o proveedor a la izquierda, el listado se acota a esos articulos.</p>
-      <div class="summary-row" id="summary-row"></div>
-      <div class="table-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Codigo</th><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
-              <th>Subcanal MKT</th><th>Compra</th><th id="th-valor">Importe periodo</th><th>Ultima compra</th>
-            </tr>
-          </thead>
-          <tbody id="table-body"></tbody>
-        </table>
-      </div>
-    </div>
+  </div>
 
+  <div id="top3-results" style="display:none">
+    <div class="card">
+      <h2>Comparativa &mdash; LA PAULINA vs SODECAR vs ORALI</h2>
+      <p class="lede" style="margin-bottom:14px">Mismos filtros de vendedor/zona/dia/subcanal/mes que la vista general, pero sin importar el producto o proveedor tildado a la izquierda: compara siempre estos 3 proveedores entre si.</p>
+      <div id="top3-table"></div>
+    </div>
   </div>
 
   </div>
@@ -447,6 +499,31 @@ function kilos(n) { return n.toLocaleString("es-AR", {maximumFractionDigits: 1})
 function pct(n) { return n.toFixed(1).replace(".", ",") + "%"; }
 function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 
+/* ---------------- proveedores (agrupan marcas) ---------------- */
+const PROVEEDOR_MAP = {
+  "la paulina": "LA PAULINA",
+  "orali": "ORALI",
+  "precios fabrica orali": "ORALI",
+  "la casona": "SODECAR",
+  "la residencia": "SODECAR",
+  "ilolay": "ILOLAY",
+  "dulcor": "DULCOR",
+  "grupolar": "GRUPOLAR",
+  "ricrem": "RICREM",
+  "la quesera": "LA QUESERA",
+  "pronto express": "PRONTO EXPRESS",
+  "prinlac": "PRINLAC",
+  "cab espinillos": "CAB ESPINILLOS",
+  "cleff": "CLEFF",
+  "manicol": "MANICOL",
+  "don amado": "DON AMADO",
+  "onneg": "ONNEG",
+};
+function proveedorDe(marca) {
+  const key = (marca || "").trim().toLowerCase();
+  return PROVEEDOR_MAP[key] || (marca || "").trim() || "Sin proveedor";
+}
+
 /* ---------------- indices ---------------- */
 const CLI_BY_ID = new Map(CLIENTES.map(c => [c.id, c]));
 const ART_BY_ID = new Map(ARTICULOS.map(a => [a.id, a]));
@@ -463,7 +540,7 @@ ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 /* ---------------- estado ---------------- */
 const state = {
   productIds: new Set(),
-  months: new Set(MESES.map(m => m.key)),
+  months: new Set(MESES.length ? [MESES[MESES.length - 1].key] : []), // mes en curso por defecto
   dia: null,
   subcanales: new Set(),
   marcas: new Set(),
@@ -486,7 +563,7 @@ Object.keys(LINEAS).sort().forEach(linea => {
     const row = document.createElement("div");
     row.className = "line-row";
     row.dataset.name = a.n.toLowerCase();
-    row.dataset.marca = (a.m || "").toLowerCase();
+    row.dataset.marca = proveedorDe(a.m).toLowerCase();
     row.innerHTML = `<input type="checkbox" class="product-check" data-id="${a.id}" ${state.productIds.has(a.id) ? "checked" : ""}><label>${esc(a.n)}</label>`;
     det.appendChild(row);
   });
@@ -495,7 +572,7 @@ Object.keys(LINEAS).sort().forEach(linea => {
 
 const marcaToggleEl = document.getElementById("marca-toggles");
 const MARCAS_ORIGINAL = new Map();
-Array.from(new Set(ARTICULOS.map(a => (a.m || "").trim()).filter(Boolean))).sort().forEach(m => {
+Array.from(new Set(ARTICULOS.map(a => proveedorDe(a.m)).filter(Boolean))).sort().forEach(m => {
   const key = m.toLowerCase();
   MARCAS_ORIGINAL.set(key, m);
   const lbl = document.createElement("label");
@@ -509,7 +586,7 @@ function marcasLabel() {
 /* devuelve null si no hay restriccion (general/todo el catalogo), o un Set con los idArticulo permitidos */
 function activeArticleScope() {
   if (state.productIds.size) return state.productIds;
-  if (state.marcas.size) return new Set(ARTICULOS.filter(a => state.marcas.has((a.m || "").toLowerCase())).map(a => a.id));
+  if (state.marcas.size) return new Set(ARTICULOS.filter(a => state.marcas.has(proveedorDe(a.m).toLowerCase())).map(a => a.id));
   return null;
 }
 
@@ -611,7 +688,7 @@ renderChips();
 const monthsEl = document.getElementById("month-toggles");
 MESES.forEach(m => {
   const lbl = document.createElement("label");
-  lbl.innerHTML = `<input type="checkbox" class="f-mes" value="${esc(m.key)}" checked> ${esc(m.label)}`;
+  lbl.innerHTML = `<input type="checkbox" class="f-mes" value="${esc(m.key)}" ${state.months.has(m.key) ? "checked" : ""}> ${esc(m.label)}`;
   monthsEl.appendChild(lbl);
 });
 
@@ -674,6 +751,17 @@ document.getElementById("clear-fecha").addEventListener("click", () => {
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
 
+/* ---------------- pestanas (vista general / top 3 proveedores) ---------------- */
+const TOP3_PROVEEDORES = ["LA PAULINA", "SODECAR", "ORALI"];
+document.getElementById("tab-general").addEventListener("click", () => switchTab("general"));
+document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
+function switchTab(tab) {
+  document.getElementById("tab-general").classList.toggle("active", tab === "general");
+  document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
+  document.getElementById("results").style.display = tab === "general" ? "block" : "none";
+  document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
+}
+
 /* ---------------- detalle de productos por cliente (desplegable en la tabla) ---------------- */
 function clientProductBreakdown(cid) {
   const scope = activeArticleScope(); // null = todo el catalogo; Set = solo lo que esta filtrado
@@ -701,6 +789,26 @@ function clientProductBreakdown(cid) {
   rows.sort((a, b) => b.valor - a.valor);
   return rows;
 }
+/* top historico (todo lo disponible, sin filtro de periodo/producto) para clientes que no compraron en el periodo actual */
+function clientTopHistorical(cid, limit) {
+  const arr = CLIENT_VENTAS_INDEX.get(cid) || [];
+  const byArt = new Map();
+  arr.forEach(([, ida, fecha, imp, kg]) => {
+    let e = byArt.get(ida);
+    if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
+    e.importe += imp;
+    e.kg += kg;
+    if (fecha > e.ultima) e.ultima = fecha;
+  });
+  const isKg = state.metric === "kg";
+  const rows = Array.from(byArt.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    const valor = isKg ? Math.round(e.kg * 1000) / 1000 : Math.round(e.importe * 100) / 100;
+    return { nombre: art ? art.n : "Otros / ajustes (sin articulo)", valor, ultima: e.ultima };
+  }).filter(r => r.valor > 0);
+  rows.sort((a, b) => b.valor - a.valor);
+  return rows.slice(0, limit);
+}
 function renderClientProductsRow(cid) {
   const items = clientProductBreakdown(cid);
   const colspan = 10;
@@ -708,7 +816,13 @@ function renderClientProductsRow(cid) {
     const msg = activeArticleScope()
       ? "No compro ninguno de los articulos filtrados en el periodo seleccionado."
       : "No compro ningun articulo en el periodo seleccionado.";
-    return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box"><div class="cp-empty">${msg}</div></div></td></tr>`;
+    const historicos = clientTopHistorical(cid, 10);
+    const histHtml = historicos.length ? `
+      <div class="cp-hist-title">Top 10 articulos que compraba habitualmente (historico disponible):</div>
+      <div class="cp-head"><span>Producto</span><span>${labelMagnitud()}</span><span>Ultima compra</span></div>
+      ${historicos.map(r => `<div class="cp-item"><span class="cp-name">${esc(r.nombre)}</span><span class="cp-val">${fmtValor(r.valor)}</span><span class="cp-date">${esc(r.ultima || "")}</span></div>`).join("")}
+    ` : "";
+    return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box"><div class="cp-empty">${msg}</div>${histHtml}</div></td></tr>`;
   }
   const rowsHtml = items.map(r => `<div class="cp-item"><span class="cp-name">${esc(r.nombre)}</span><span class="cp-val">${fmtValor(r.valor)}</span><span class="cp-date">${esc(r.ultima || "")}</span></div>`).join("");
   return `<tr class="client-products-row" data-for="${cid}"><td colspan="${colspan}"><div class="cp-box">
@@ -967,6 +1081,89 @@ function barsSVG(rows, opts) {
   return out;
 }
 
+/* ---------------- objetivo del mes (+10% vs mes anterior) ---------------- */
+function computeMesActualAnterior() {
+  const arr = MESES.map(m => m.key).slice().sort();
+  if (arr.length < 2) return null;
+  return { actual: arr[arr.length - 1], anterior: arr[arr.length - 2] };
+}
+function sumaMesesCliente(clientIdSet, articleScope, mesActual, mesAnterior) {
+  let actualImp = 0, actualKg = 0, anteriorImp = 0, anteriorKg = 0;
+  for (const row of VENTAS) {
+    const [c, a, fecha, imp, kg] = row;
+    if (clientIdSet && !clientIdSet.has(c)) continue;
+    if (articleScope && !articleScope.has(a)) continue;
+    const mk = fecha.slice(0, 7);
+    if (mk === mesActual) { actualImp += imp; actualKg += kg; }
+    else if (mk === mesAnterior) { anteriorImp += imp; anteriorKg += kg; }
+  }
+  return { actualImp, actualKg, anteriorImp, anteriorKg };
+}
+function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnterior) {
+  const perCliente = new Map();
+  for (const row of VENTAS) {
+    const [c, a, fecha, imp, kg] = row;
+    if (clientIdSet && !clientIdSet.has(c)) continue;
+    if (articleScope && !articleScope.has(a)) continue;
+    const mk = fecha.slice(0, 7);
+    if (mk !== mesActual && mk !== mesAnterior) continue;
+    let e = perCliente.get(c);
+    if (!e) { e = { actual: 0, anterior: 0 }; perCliente.set(c, e); }
+    if (mk === mesActual) e.actual += imp; else e.anterior += imp;
+  }
+  let riesgo = 0, nuevos = 0;
+  perCliente.forEach(e => {
+    if (e.anterior > 0 && e.actual <= 0) riesgo++;
+    if (e.anterior <= 0 && e.actual > 0) nuevos++;
+  });
+  return { riesgo, nuevos };
+}
+function objetivoFila(label, actual, anterior, fmt) {
+  const objetivo = anterior * 1.10;
+  const pctBar = objetivo > 0 ? actual / objetivo * 100 : (actual > 0 ? 100 : 0);
+  const reached = anterior > 0 ? actual >= objetivo : actual > 0;
+  const falta = Math.max(0, objetivo - actual);
+  const marker = anterior > 0 ? `<div class="obj-marker" style="left:${(100 / 1.10).toFixed(1)}%" title="Mes anterior"></div>` : "";
+  const nums = anterior > 0
+    ? `Ant. <b>${fmt(anterior)}</b> &middot; Obj. +10% <b>${fmt(objetivo)}</b> &middot; Llevas <b>${fmt(actual)}</b>${falta > 0 ? ` &middot; Faltan <b>${fmt(falta)}</b>` : " &middot; <b>&#10003; alcanzado</b>"}`
+    : `Sin datos del mes anterior &middot; Llevas <b>${fmt(actual)}</b>`;
+  return `<div class="obj-row">
+    <div class="obj-row-label">${esc(label)}</div>
+    <div class="obj-track"><div class="obj-fill${reached ? " reached" : ""}" style="width:${Math.max(0, Math.min(100, pctBar)).toFixed(1)}%"></div>${marker}</div>
+    <div class="obj-nums">${nums}</div>
+  </div>`;
+}
+function renderObjetivoBlock(containerId, titulo, stats) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!stats) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="obj-block">
+    <div class="obj-title">${titulo}</div>
+    ${objetivoFila("Facturacion", stats.actualImp, stats.anteriorImp, money)}
+    ${objetivoFila("Kilos", stats.actualKg, stats.anteriorKg, kilos)}
+  </div>`;
+}
+function renderTop3(provStats, totalClientesFiltrados, isKg) {
+  const rowsHtml = TOP3_PROVEEDORES.map(prov => {
+    const e = provStats.get(prov);
+    const compran = e ? e.clientes.size : 0;
+    const cobertura = totalClientesFiltrados ? compran / totalClientesFiltrados * 100 : 0;
+    const importe = e ? e.importe : 0;
+    const kgTotal = e ? e.kg : 0;
+    let topProd = "-";
+    if (e && e.porArticulo.size) {
+      const top = Array.from(e.porArticulo.entries()).sort((a, b) => (isKg ? b[1].kg - a[1].kg : b[1].importe - a[1].importe))[0];
+      const art = ART_BY_ID.get(top[0]);
+      topProd = art ? art.n : "-";
+    }
+    return `<tr><td class="name-cell">${esc(prov)}</td><td>${pct(cobertura)} (${compran}/${totalClientesFiltrados})</td><td>${money(importe)}</td><td>${kilos(kgTotal)}</td><td>${esc(topProd)}</td></tr>`;
+  }).join("");
+  const el = document.getElementById("top3-table");
+  if (el) {
+    el.innerHTML = `<div class="table-scroll" style="max-height:none"><table class="data-table"><thead><tr><th>Proveedor</th><th>Cobertura</th><th>Facturacion</th><th>Kilos</th><th>Producto top</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+  }
+}
+
 /* ---------------- calculo principal ---------------- */
 function render() {
   const productIds = state.productIds;
@@ -974,6 +1171,8 @@ function render() {
   const marcaNombre = marcasFiltro.size ? marcasLabel() : "";
   const marcaArticleIds = productIds.size === 0 ? activeArticleScope() : null;
   const allProducts = productIds.size === 0 && !marcaArticleIds; // sin seleccion ni proveedor = general (todo el catalogo)
+  const articleScope = productIds.size ? productIds : marcaArticleIds; // null = sin restriccion (allProducts)
+  const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
   const months = state.months;
   document.getElementById("results-empty").style.display = "none";
   document.getElementById("results").style.display = "block";
@@ -1005,7 +1204,7 @@ function render() {
   const subcanales = state.subcanales;
   const q = buscarInput.value.trim().toLowerCase();
 
-  const rows = [];
+  const filteredClientes = [];
   for (const c of CLIENTES) {
     if (v && String(c.v) !== v) continue;
     if (d && c.d !== d) continue;
@@ -1013,6 +1212,32 @@ function render() {
     if (zona === "fuera" && c.z) continue;
     if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
     if (q && !c.n.toLowerCase().includes(q) && !String(c.id).includes(q)) continue;
+    filteredClientes.push(c);
+  }
+  const filteredClienteIdSet = new Set(filteredClientes.map(c => c.id));
+
+  // estadisticas por proveedor (siempre los 15, sin importar el producto/proveedor tildado a la izquierda)
+  const provStats = new Map();
+  for (const row of VENTAS) {
+    const [c, a, fecha, imp, kg] = row;
+    if (!filteredClienteIdSet.has(c)) continue;
+    if (state.dia) { if (fecha !== state.dia) continue; } else if (!months.has(fecha.slice(0, 7))) continue;
+    if (imp === 0 && kg === 0) continue;
+    const art = ART_BY_ID.get(a);
+    const prov = art ? proveedorDe(art.m) : "Sin proveedor";
+    let e = provStats.get(prov);
+    if (!e) { e = { clientes: new Set(), importe: 0, kg: 0, porArticulo: new Map() }; provStats.set(prov, e); }
+    e.clientes.add(c);
+    e.importe += imp;
+    e.kg += kg;
+    let ea = e.porArticulo.get(a);
+    if (!ea) { ea = { importe: 0, kg: 0 }; e.porArticulo.set(a, ea); }
+    ea.importe += imp;
+    ea.kg += kg;
+  }
+
+  const rows = [];
+  for (const c of filteredClientes) {
     const e = aggByClient.get(c.id);
     const importe = e ? Math.round(e.importe * 100) / 100 : 0;
     const kg = e ? Math.round(e.kg * 1000) / 1000 : 0;
@@ -1041,6 +1266,15 @@ function render() {
     if (total && acum / total * 100 >= 80) break;
   }
 
+  // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
+  const mesesInfo = computeMesActualAnterior();
+  let objEmpresa = null, objCurrent = null, riesgoNuevos = { riesgo: 0, nuevos: 0 };
+  if (mesesInfo) {
+    objEmpresa = sumaMesesCliente(null, articleScope, mesesInfo.actual, mesesInfo.anterior);
+    objCurrent = sumaMesesCliente(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior);
+    riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior);
+  }
+
   // tiles
   const productLabel = allProducts
     ? `General &mdash; los ${ARTICULOS.length} articulos del catalogo`
@@ -1049,16 +1283,45 @@ function render() {
         : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`));
   document.getElementById("tiles").innerHTML = [
     [`${labelMagnitud()} del periodo`, fmtValor(total), productLabel],
+    ["Ticket promedio", fmtValor(compradores.length ? total / compradores.length : 0), "por cliente que compra"],
+    ["Clientes en riesgo", riesgoNuevos.riesgo.toLocaleString("es-AR"), "compraban el mes anterior, este mes (a la fecha) todavia no"],
     ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
     ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
     ["Clientes en la seleccion actual", totalClientes.toLocaleString("es-AR"), `${compradores.length} compran`],
   ].map(([label,value,sub]) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`).join("");
+
+  // objetivo del mes
+  if (mesesInfo) {
+    renderObjetivoBlock("objetivo-empresa", `Empresa (todos los clientes) &middot; ${productLabel}`, objEmpresa);
+    if (v) {
+      const vNombre = vendedoresSet.get(Number(v)) || "";
+      renderObjetivoBlock("objetivo-vendedor", `Vendedor V${esc(v)} - ${esc(vNombre)} (con los filtros actuales)`, objCurrent);
+    } else {
+      document.getElementById("objetivo-vendedor").innerHTML = "";
+    }
+  } else {
+    document.getElementById("objetivo-empresa").innerHTML = `<p class="lede">Todavia no hay dos meses de datos para calcular el objetivo.</p>`;
+    document.getElementById("objetivo-vendedor").innerHTML = "";
+  }
 
   // hallazgos
   const findings = [];
   findings.push(`<li><b>${pct(cobertura)} de cobertura</b> sobre los ${totalClientes.toLocaleString("es-AR")} clientes de la seleccion actual (${compradores.length} compran) &mdash; sobre los que tienen ruta de vendedor asignada, la cobertura es <b>${pct(coberturaRuta)}</b>.</li>`);
   if (total > 0) {
     findings.push(`<li><b>Concentracion:</b> los 10 clientes mas grandes explican el <b>${pct(top10Pct)}</b> de ${labelMagnitud().toLowerCase()} filtrado(a); hacen falta <b>${pareto80n}</b> de los ${compradores.length} compradores para llegar al 80%.</li>`);
+  }
+  if (mesesInfo && objCurrent) {
+    const valAct = isKg ? objCurrent.actualKg : objCurrent.actualImp;
+    const valAnt = isKg ? objCurrent.anteriorKg : objCurrent.anteriorImp;
+    if (valAnt > 0) {
+      const delta = (valAct - valAnt) / valAnt * 100;
+      const dir = delta >= 0 ? "arriba" : "abajo";
+      const mesAntLabel = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
+      findings.push(`<li><b>Tendencia:</b> che, ven&iacute;s <b>${pct(Math.abs(delta))} ${dir}</b> en ${labelMagnitud().toLowerCase()} respecto a ${esc(mesAntLabel)} (con los filtros actuales) &mdash; ${fmtValor(valAct)} vs ${fmtValor(valAnt)}.</li>`);
+    }
+  }
+  if (riesgoNuevos.riesgo > 0) {
+    findings.push(`<li><b>Atenci&oacute;n:</b> <b>${riesgoNuevos.riesgo}</b> cliente(s) que compraban el mes anterior todavia no compraron este mes (con los filtros actuales).</li>`);
   }
   // subcanal top
   const scMap = new Map();
@@ -1101,6 +1364,14 @@ function render() {
   const subcanalBarRows = scRows.map(s => ({ label: s.label, value: s.valor, valueLabel: `${fmtValor(s.valor)} &middot; ${pct(s.cobertura)} cobertura (${s.compran}/${s.total})` }));
   document.getElementById("chart-subcanal").innerHTML = barsSVG(subcanalBarRows, { maxRows: 12, padR: 230, ariaLabel: "Cobertura por subcanal" });
 
+  // proveedor chart (escala fija 0-100%, siempre los 15 proveedores sin importar el filtro de producto/proveedor)
+  const provRows = Array.from(provStats.entries()).map(([prov, e]) => ({
+    label: prov, compran: e.clientes.size, total: filteredClientes.length,
+    cobertura: filteredClientes.length ? e.clientes.size / filteredClientes.length * 100 : 0,
+  })).sort((a, b) => b.cobertura - a.cobertura);
+  const proveedorBarRows = provRows.map(p => ({ label: p.label, value: p.cobertura, valueLabel: `${pct(p.cobertura)} &middot; ${p.compran}/${p.total} cli.` }));
+  document.getElementById("chart-proveedor").innerHTML = barsSVG(proveedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por proveedor" });
+
   // vendedor chart (escala fija 0-100%)
   const vendedorBarRows = vRows.slice().sort((a,b)=>b.cobertura-a.cobertura).map(vr => ({ label: vr.nombre, value: vr.cobertura, valueLabel: `${pct(vr.cobertura)} &middot; ${vr.compran}/${vr.total} cli.` }));
   document.getElementById("chart-vendedor").innerHTML = barsSVG(vendedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por vendedor" });
@@ -1111,7 +1382,6 @@ function render() {
     : (productIds.size === 0
         ? [`General de ${marcaNombre} (${marcaArticleIds.size} articulos)`]
         : Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean));
-  const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
   const periodoTxt = state.dia
     ? `Dia exacto: ${state.dia}`
     : `Meses: ${Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno"}`;
@@ -1156,6 +1426,8 @@ function render() {
       <td>${fechaStr}</td>
     </tr>`;
   }).join("");
+
+  renderTop3(provStats, filteredClientes.length, isKg);
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
 }
