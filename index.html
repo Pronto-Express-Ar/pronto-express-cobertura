@@ -474,6 +474,12 @@
 
   <div id="top3-results" style="display:none">
     <div class="card">
+      <h2>Objetivo del mes por proveedor &mdash; +10% vs mes anterior</h2>
+      <p class="lede" style="margin-bottom:14px">Mismos clientes que la comparativa de abajo (filtros de vendedor/zona/dia/subcanal). Cada barra es ese proveedor solo, mes actual vs mes anterior.</p>
+      <div id="top3-objetivo"></div>
+    </div>
+
+    <div class="card">
       <h2>Comparativa &mdash; LA PAULINA vs SODECAR vs ORALI</h2>
       <p class="lede" style="margin-bottom:14px">Mismos filtros de vendedor/zona/dia/subcanal/mes que la vista general, pero sin importar el producto o proveedor tildado a la izquierda: compara siempre estos 3 proveedores entre si.</p>
       <div id="top3-table"></div>
@@ -527,6 +533,13 @@ function proveedorDe(marca) {
   const key = (marca || "").trim().toLowerCase();
   return PROVEEDOR_MAP[key] || (marca || "").trim() || "Sin proveedor";
 }
+const ARTICULOS_POR_PROVEEDOR = new Map(); // proveedor -> Set(idArticulo)
+ARTICULOS.forEach(a => {
+  const prov = proveedorDe(a.m);
+  let s = ARTICULOS_POR_PROVEEDOR.get(prov);
+  if (!s) { s = new Set(); ARTICULOS_POR_PROVEEDOR.set(prov, s); }
+  s.add(a.id);
+});
 
 /* ---------------- indices ---------------- */
 const CLI_BY_ID = new Map(CLIENTES.map(c => [c.id, c]));
@@ -1147,6 +1160,20 @@ function renderObjetivoBlock(containerId, titulo, stats) {
     ${objetivoFila("Kilos", stats.actualKg, stats.anteriorKg, kilos)}
   </div>`;
 }
+function renderTop3Objetivo(clientIdSet, mesesInfo) {
+  const el = document.getElementById("top3-objetivo");
+  if (!el) return;
+  if (!mesesInfo) { el.innerHTML = `<p class="lede">Todavia no hay dos meses de datos para calcular el objetivo.</p>`; return; }
+  el.innerHTML = TOP3_PROVEEDORES.map(prov => {
+    const scope = ARTICULOS_POR_PROVEEDOR.get(prov) || new Set();
+    const stats = sumaMesesCliente(clientIdSet, scope, mesesInfo.actual, mesesInfo.anterior);
+    return `<div class="obj-block">
+      <div class="obj-title">${esc(prov)}</div>
+      ${objetivoFila("Facturacion", stats.actualImp, stats.anteriorImp, money)}
+      ${objetivoFila("Kilos", stats.actualKg, stats.anteriorKg, kilos)}
+    </div>`;
+  }).join("");
+}
 function renderTop3(provStats, totalClientesFiltrados, isKg) {
   const rowsHtml = TOP3_PROVEEDORES.map(prov => {
     const e = provStats.get(prov);
@@ -1432,6 +1459,7 @@ function render() {
   }).join("");
 
   renderTop3(provStats, filteredClientes.length, isKg);
+  renderTop3Objetivo(filteredClienteIdSet, mesesInfo);
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
 }
