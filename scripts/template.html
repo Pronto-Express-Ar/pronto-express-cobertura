@@ -465,6 +465,12 @@
     </div>
 
     <div class="card">
+      <h2>Top 10 SKU por clientes compradores</h2>
+      <p class="lede" style="margin-bottom:14px">Muestra los productos que llegan a mas clientes activos en el periodo. Si elegis uno o mas proveedores, el ranking se limita a esos proveedores; sin proveedores seleccionados, muestra el top 10 general.</p>
+      <div id="chart-sku"></div>
+    </div>
+
+    <div class="card">
       <h2>Cobertura por vendedor</h2>
       <p class="lede" style="margin-bottom:14px">% de clientes de la ruta L-V de cada vendedor (dentro de los filtros activos) que compraron el producto seleccionado al menos una vez.</p>
       <div id="chart-vendedor"></div>
@@ -1096,7 +1102,7 @@ function paretoSVG(compradores, total) {
 function barsSVG(rows, opts) {
   if (rows.length === 0) return '<div class="empty-chart">Sin datos para graficar.</div>';
   rows = rows.slice(0, opts.maxRows || 14);
-  const barH = 22, gap = 14, padT = 4, labelW = 190, padR = opts.padR || 150, w = 640;
+  const barH = 22, gap = 14, padT = 4, labelW = opts.labelW || 190, padR = opts.padR || 150, w = opts.width || 640;
   const rowH = barH + gap;
   const h = padT + rowH * rows.length + 8;
   const plotW = w - labelW - padR;
@@ -1265,6 +1271,7 @@ function render() {
 
   // estadisticas por proveedor (siempre los 15, sin importar el producto/proveedor tildado a la izquierda)
   const provStats = new Map();
+  const skuStats = new Map();
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
     if (!filteredClienteIdSet.has(c)) continue;
@@ -1281,6 +1288,20 @@ function render() {
     if (!ea) { ea = { importe: 0, kg: 0 }; e.porArticulo.set(a, ea); }
     ea.importe += imp;
     ea.kg += kg;
+
+    // Ranking SKU: respeta solamente el filtro de proveedor. La seleccion
+    // manual de productos no lo limita, para que siempre sea un verdadero top 10.
+    const provKey = prov.toLowerCase();
+    if (marcasFiltro.size === 0 || marcasFiltro.has(provKey)) {
+      let sku = skuStats.get(a);
+      if (!sku) { sku = { importe: 0, kg: 0, porCliente: new Map() }; skuStats.set(a, sku); }
+      sku.importe += imp;
+      sku.kg += kg;
+      let clienteSku = sku.porCliente.get(c);
+      if (!clienteSku) { clienteSku = { importe: 0, kg: 0 }; sku.porCliente.set(c, clienteSku); }
+      clienteSku.importe += imp;
+      clienteSku.kg += kg;
+    }
   }
 
   const rows = [];
@@ -1418,6 +1439,27 @@ function render() {
   })).sort((a, b) => b.cobertura - a.cobertura);
   const proveedorBarRows = provRows.map(p => ({ label: p.label, value: p.cobertura, valueLabel: `${pct(p.cobertura)} &middot; ${p.compran}/${p.total} cli.` }));
   document.getElementById("chart-proveedor").innerHTML = barsSVG(proveedorBarRows, { scaleMax: 100, zeroColor: true, padR: 150, ariaLabel: "Cobertura por proveedor" });
+
+  // Top 10 SKU por cantidad de clientes compradores. Con proveedores tildados,
+  // toma la union de sus catalogos; sin seleccion, considera todos los SKU.
+  const skuRows = Array.from(skuStats.entries()).map(([articleId, e]) => {
+    const art = ART_BY_ID.get(articleId);
+    const compradoresSku = Array.from(e.porCliente.values()).filter(x => x.importe > 0 || x.kg > 0).length;
+    return {
+      label: art ? art.n : `Articulo ${articleId}`,
+      proveedor: art ? proveedorDe(art.m) : "Sin proveedor",
+      compran: compradoresSku,
+      total: filteredClientes.length,
+      cobertura: filteredClientes.length ? compradoresSku / filteredClientes.length * 100 : 0,
+      valor: isKg ? e.kg : e.importe,
+    };
+  }).filter(s => s.compran > 0).sort((a, b) => b.compran - a.compran || b.valor - a.valor).slice(0, 10);
+  const skuBarRows = skuRows.map(s => ({
+    label: s.label.length > 38 ? s.label.slice(0, 37) + "..." : s.label,
+    value: s.cobertura,
+    valueLabel: `${pct(s.cobertura)} &middot; ${s.compran}/${s.total} cli. &middot; ${esc(s.proveedor)}`,
+  }));
+  document.getElementById("chart-sku").innerHTML = barsSVG(skuBarRows, { scaleMax: 100, zeroColor: true, maxRows: 10, labelW: 250, padR: 205, width: 760, ariaLabel: "Top 10 SKU por clientes compradores" });
 
   // vendedor chart (escala fija 0-100%)
   const vendedorBarRows = vRows.slice().sort((a,b)=>b.cobertura-a.cobertura).map(vr => ({ label: vr.nombre, value: vr.cobertura, valueLabel: `${pct(vr.cobertura)} &middot; ${vr.compran}/${vr.total} cli.` }));
