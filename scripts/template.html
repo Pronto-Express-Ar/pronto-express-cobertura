@@ -496,7 +496,7 @@
   </div>
 
   <div class="foot-note">
-    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. La ruta de cada cliente es la vigente al momento de generar el informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
+    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. La ruta de cada cliente es la vigente al momento de generar el informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> __TOTAL_CLIENTES__ clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). __TOTAL_ARTICULOS__ articulos activos en el catalogo, agrupados en __TOTAL_LINEAS__ lineas de producto.</p>
     <p>Datos extraidos en vivo de la API de Chess ERP el __FECHA_GENERADO__ (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
@@ -514,20 +514,15 @@ function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 /* ---------------- proveedores (agrupan marcas) ---------------- */
 const PROVEEDOR_MAP = {
   "la paulina": "LA PAULINA",
+  "ricrem": "LA PAULINA",
   "orali": "ORALI",
   "precios fabrica orali": "ORALI",
   "la casona": "SODECAR",
   "la residencia": "SODECAR",
   "ilolay": "ILOLAY",
-  "dulcor": "DULCOR",
-  "grupolar": "GRUPOLAR",
-  "ricrem": "RICREM",
   "la quesera": "LA QUESERA",
-  "pronto express": "PRONTO EXPRESS",
   "prinlac": "PRINLAC",
-  "cab espinillos": "CAB ESPINILLOS",
   "cleff": "CLEFF",
-  "manicol": "MANICOL",
   "don amado": "DON AMADO",
   "onneg": "ONNEG",
 };
@@ -1269,7 +1264,7 @@ function render() {
   }
   const filteredClienteIdSet = new Set(filteredClientes.map(c => c.id));
 
-  // estadisticas por proveedor (siempre los 15, sin importar el producto/proveedor tildado a la izquierda)
+  // estadisticas por proveedor del universo vigente, sin importar el filtro izquierdo
   const provStats = new Map();
   const skuStats = new Map();
   for (const row of VENTAS) {
@@ -1432,7 +1427,7 @@ function render() {
   const subcanalBarRows = scRows.map(s => ({ label: s.label, value: s.valor, valueLabel: `${fmtValor(s.valor)} &middot; ${pct(s.cobertura)} cobertura (${s.compran}/${s.total})` }));
   document.getElementById("chart-subcanal").innerHTML = barsSVG(subcanalBarRows, { maxRows: 12, padR: 230, ariaLabel: "Cobertura por subcanal" });
 
-  // proveedor chart (escala fija 0-100%, siempre los 15 proveedores sin importar el filtro de producto/proveedor)
+  // proveedor chart (escala fija 0-100%, sin importar el filtro de producto/proveedor)
   const provRows = Array.from(provStats.entries()).map(([prov, e]) => ({
     label: prov, compran: e.clientes.size, total: filteredClientes.length,
     cobertura: filteredClientes.length ? e.clientes.size / filteredClientes.length * 100 : 0,

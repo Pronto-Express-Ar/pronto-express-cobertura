@@ -159,18 +159,59 @@ def marca_de(art):
     return ""
 
 
+PROVEEDOR_MAP = {
+    "la paulina": "LA PAULINA",
+    "ricrem": "LA PAULINA",
+    "orali": "ORALI",
+    "precios fabrica orali": "ORALI",
+    "la casona": "SODECAR",
+    "la residencia": "SODECAR",
+    "ilolay": "ILOLAY",
+    "la quesera": "LA QUESERA",
+    "prinlac": "PRINLAC",
+    "cab espinillos": "CAB ESPINILLOS",
+    "cleff": "CLEFF",
+    "don amado": "DON AMADO",
+    "onneg": "ONNEG",
+}
+
+# Proveedores que no forman parte del universo comercial de este informe.
+# Se excluyen antes de agregar ventas para que tampoco afecten generales,
+# objetivos, cobertura, rankings ni historiales por cliente.
+PROVEEDORES_EXCLUIDOS = {
+    "CAB ESPINILLOS",
+    "DULCOR",
+    "GRUPOLAR",
+    "MANICOL",
+    "PRONTO EXPRESS",
+}
+
+
+def proveedor_de(art):
+    marca = marca_de(art)
+    return PROVEEDOR_MAP.get(marca.casefold(), marca or "Sin proveedor")
+
+
 articulos_out = []
+articulos_excluidos = {}
 for a in articulos_raw:
     if a.get("anulado"):
+        continue
+    proveedor = proveedor_de(a)
+    if proveedor.upper() in PROVEEDORES_EXCLUIDOS:
+        articulos_excluidos[proveedor] = articulos_excluidos.get(proveedor, 0) + 1
         continue
     articulos_out.append({
         "id": a["idArticulo"],
         "n": a["desArticulo"].strip(),
         "l": linea_de(a),
-        "m": marca_de(a),
+        # El panel usa este campo como proveedor. RICREM ya queda consolidado
+        # dentro de LA PAULINA y las marcas de SODECAR/ORALI tambien se agrupan.
+        "m": proveedor,
     })
 articulos_out.sort(key=lambda a: (a["l"], a["n"]))
 print("Articulos catalogo:", len(articulos_out))
+print("Articulos excluidos por proveedor:", articulos_excluidos)
 
 with open(f"{DATA_DIR}/articulos_multi.json", "w", encoding="utf-8") as f:
     json.dump(articulos_out, f, ensure_ascii=False)
@@ -183,6 +224,7 @@ print("Lineas de venta totales cargadas:", len(ventas))
 
 agg = {}  # (idc, ida, fecha "YYYY-MM-DD") -> {imp, kg}
 clientes_ids = set(clientes_out.keys())
+articulos_ids = {a["id"] for a in articulos_out}
 meses_vistos = {}  # "YYYY-MM" -> (year, month)
 
 for v in ventas:
@@ -192,6 +234,8 @@ for v in ventas:
     if v.get("anulado") == "SI":
         continue
     ida = v.get("idArticulo")
+    if ida not in articulos_ids:
+        continue
     fecha = v.get("fechaComprobate") or ""
     if len(fecha) < 10:
         continue
