@@ -310,7 +310,7 @@
     <h1>Panel de Cobertura de Producto &mdash; Pronto Express</h1>
     <div class="meta">
       Alcance: <b>746 clientes</b> &middot; <b>5 vendedores</b> (Lucas Serey, Maximiliano Luna, Gabriela Brandan, Analia Valenti, Superv. Vanesa Stabile) &middot;
-      Generado: <b>16/08/2026</b> &middot; Fuente: API Chess ERP (actualizacion automatica diaria)
+      Generado: <b>17/08/2026</b> &middot; Fuente: API Chess ERP (actualizacion automatica diaria)
     </div>
     </div>
   </header>
@@ -498,7 +498,7 @@
   <div class="foot-note">
     <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. La ruta de cada cliente es la vigente al momento de generar el informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> 746 clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). 542 articulos activos en el catalogo, agrupados en 47 lineas de producto.</p>
-    <p>Datos extraidos en vivo de la API de Chess ERP el 16/08/2026 (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
+    <p>Datos extraidos en vivo de la API de Chess ERP el 17/08/2026 (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
 
 </div>
@@ -1024,7 +1024,7 @@ document.getElementById("export-btn").addEventListener("click", () => {
     `Producto(s): ${productNames.join(", ")}`,
     `Medido en: ${isKg ? "Kilos" : "Dinero"}`,
     [periodoTxt, ...filtrosParts].join(" | "),
-    `Pronto Express - generado 16/08/2026`,
+    `Pronto Express - generado 17/08/2026`,
   ];
   const headers = ["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"];
   const dataRows = rows.map(r => {
@@ -1485,7 +1485,7 @@ function render() {
   document.getElementById("print-context").innerHTML = `
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
     <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
-    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado 16/08/2026</div>
+    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado 17/08/2026</div>
   `;
 
   // resumen + tabla
