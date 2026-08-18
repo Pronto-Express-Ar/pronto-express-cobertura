@@ -320,8 +320,9 @@
   <div class="card">
     <h2>1. Elegi el producto (o varios) a analizar</h2>
     <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
+    <label for="product-search" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:5px">Buscar producto (nombre, codigo o linea)</label>
     <div class="product-toolbar">
-      <input type="text" id="product-search" placeholder="Buscar articulo o linea...">
+      <input type="search" id="product-search" placeholder="Ej.: ralladito, 440669 o untables...">
       <button class="btn-link" id="clear-products">Limpiar todos los filtros</button>
     </div>
     <div class="filter-group" style="margin-bottom:10px">
@@ -415,6 +416,7 @@
         <h2 style="margin:0">Detalle cliente por cliente</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-link btn-print" id="export-btn" type="button">&#128190; Exportar a Excel</button>
+          <button class="btn-link btn-print" id="export-client-products-btn" type="button">&#128230; Exportar productos por cliente</button>
           <button class="btn-link btn-print" id="print-btn" type="button">&#128438; Imprimir esta tabla</button>
           <button class="btn-link btn-print" id="print-panel-btn" type="button">&#128196; Exportar panel a PDF (sin este detalle)</button>
         </div>
@@ -577,6 +579,7 @@ Object.keys(LINEAS).sort().forEach(linea => {
     const row = document.createElement("div");
     row.className = "line-row";
     row.dataset.name = a.n.toLowerCase();
+    row.dataset.code = String(a.id);
     row.dataset.marca = proveedorDe(a.m).toLowerCase();
     row.innerHTML = `<input type="checkbox" class="product-check" data-id="${a.id}" ${state.productIds.has(a.id) ? "checked" : ""}><label>${esc(a.n)}</label>`;
     det.appendChild(row);
@@ -697,7 +700,7 @@ function applyProductFilter() {
     const lineaMatchesQ = linea.includes(q);
     let anyMatch = false;
     det.querySelectorAll(".line-row").forEach(row => {
-      const matchQ = q === "" || row.dataset.name.includes(q) || lineaMatchesQ;
+      const matchQ = q === "" || row.dataset.name.includes(q) || row.dataset.code.includes(q) || lineaMatchesQ;
       const matchMarca = marcas.size === 0 || marcas.has(row.dataset.marca);
       const match = matchQ && matchMarca;
       row.classList.toggle("hidden", !match);
@@ -1046,6 +1049,86 @@ document.getElementById("export-btn").addEventListener("click", () => {
   const fecha = new Date().toISOString().slice(0, 10);
   a.href = url;
   a.download = `cobertura_${fecha}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("export-client-products-btn").addEventListener("click", () => {
+  if (!LAST_EXPORT) return;
+  const { rows, productNames, periodoTxt, filtrosParts } = LAST_EXPORT;
+  const scope = activeArticleScope();
+  const detailRows = [];
+
+  rows.forEach(r => {
+    const c = r.c;
+    const byArt = new Map();
+    (CLIENT_VENTAS_INDEX.get(c.id) || []).forEach(([, ida, fecha, imp, kg]) => {
+      if (scope && !scope.has(ida)) return;
+      if (state.dia) {
+        if (fecha !== state.dia) return;
+      } else if (!state.months.has(fecha.slice(0, 7))) {
+        return;
+      }
+      let e = byArt.get(ida);
+      if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
+      e.importe += imp;
+      e.kg += kg;
+      if (fecha > e.ultima) e.ultima = fecha;
+    });
+
+    const products = Array.from(byArt.entries()).map(([ida, e]) => {
+      const art = ART_BY_ID.get(ida);
+      return {
+        id: ida,
+        nombre: art ? art.n : "Otros / ajustes (sin articulo)",
+        linea: art ? art.l : "",
+        proveedor: art ? proveedorDe(art.m) : "Sin proveedor",
+        importe: Math.round(e.importe * 100) / 100,
+        kg: Math.round(e.kg * 1000) / 1000,
+        ultima: e.ultima,
+      };
+    }).filter(p => p.importe > 0 || p.kg > 0)
+      .sort((a, b) => state.metric === "kg" ? b.kg - a.kg : b.importe - a.importe);
+
+    if (!products.length) {
+      detailRows.push({ c, estado: "Sin compras en el periodo", product: null });
+      return;
+    }
+    products.forEach(product => detailRows.push({ c, estado: "Compra", product }));
+  });
+
+  const metaLines = [
+    `Alcance de productos: ${productNames.join(", ")}`,
+    [periodoTxt, ...filtrosParts].join(" | "),
+    `${rows.length} clientes del listado | ${detailRows.filter(x => x.product).length} combinaciones cliente-producto`,
+    `Pronto Express - generado __FECHA_GENERADO__`,
+  ];
+  const headers = ["Codigo cliente", "Cliente", "Localidad", "Vendedor", "Dia ruta", "Subcanal MKT", "Estado", "Codigo producto", "Producto", "Linea", "Proveedor", "Importe neto", "Kilos netos", "Ultima compra"];
+  const dataRows = detailRows.map(({ c, estado, product }) => [
+    { t: "n", v: c.id },
+    { t: "s", v: c.n },
+    { t: "s", v: c.loc },
+    { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
+    { t: "s", v: c.d },
+    { t: "s", v: c.sc },
+    { t: "s", v: estado },
+    product ? { t: "n", v: product.id } : { t: "s", v: "" },
+    { t: "s", v: product ? product.nombre : "" },
+    { t: "s", v: product ? product.linea : "" },
+    { t: "s", v: product ? product.proveedor : "" },
+    { t: "n", v: product ? product.importe : 0 },
+    { t: "n", v: product ? product.kg : 0 },
+    { t: "s", v: product ? product.ultima : "" },
+  ]);
+  const sheetXml = xlsxSheetXml(metaLines, headers, dataRows);
+  const blob = buildXlsx(sheetXml);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `productos_por_cliente_${fecha}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
