@@ -163,6 +163,15 @@
     font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
   }
+  .date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .date-range label { margin: 0; }
+  .date-range input { width: 100%; min-width: 0; box-sizing: border-box; }
+  .quick-range { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 7px; }
+  .quick-range-btn {
+    font: inherit; font-size: 12px; font-weight: 600; padding: 7px 8px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+  }
+  .quick-range-btn:hover, .quick-range-btn.active { border-color: var(--series-1); background: var(--series-1-wash); }
 
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
   .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px; }
@@ -207,6 +216,8 @@
   table.data-table tr.client-row { cursor: pointer; }
   table.data-table tr.client-row.expanded td { background: var(--series-1-wash); }
   .table-scroll { max-height: 520px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+  #client-detail-card .table-scroll { max-height: 760px; }
+  @media (max-width: 900px) { #client-detail-card .table-scroll { max-height: 68vh; } }
 
   tr.client-products-row td { padding: 0; border-bottom: 1px solid var(--gridline); }
   .cp-box { padding: 10px 16px 12px 34px; background: var(--page); max-height: 260px; overflow-y: auto; }
@@ -348,11 +359,16 @@
         <div class="pill-toggles" id="month-toggles"></div>
       </div>
       <div class="filter-group">
-        <label for="f-fecha">O un dia exacto (opcional, pisa los meses)</label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="date" id="f-fecha" style="flex:1">
-          <button class="btn-link" id="clear-fecha" type="button" title="Quitar filtro de dia">&times;</button>
+        <label>Rango de fechas <span style="font-weight:400">(pisa los meses)</span></label>
+        <div class="date-range">
+          <label>Desde<input type="date" id="f-fecha-desde"></label>
+          <label>Hasta<input type="date" id="f-fecha-hasta"></label>
         </div>
+        <div class="quick-range">
+          <button class="quick-range-btn" id="q1-btn" type="button">1.&ordf; quincena</button>
+          <button class="quick-range-btn" id="q2-btn" type="button">2.&ordf; quincena</button>
+        </div>
+        <button class="btn-link" id="clear-fecha" type="button" style="margin-top:4px">Limpiar rango de fechas</button>
       </div>
       <div class="filter-group">
         <label for="f-zona">Zona</label>
@@ -557,7 +573,8 @@ ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 const state = {
   productIds: new Set(),
   months: new Set(MESES.length ? [MESES[MESES.length - 1].key] : []), // mes en curso por defecto
-  dia: null,
+  fechaDesde: null,
+  fechaHasta: null,
   subcanales: new Set(),
   marcas: new Set(),
   metric: "money",
@@ -566,6 +583,15 @@ function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
 function labelMagnitud() { return state.metric === "kg" ? "Kilos vendidos" : "Facturacion"; }
 function ventaEsDelVendedor(row, vendedor) {
   return !vendedor || String(row[5] || "") === String(vendedor);
+}
+function hayRangoFecha() { return !!(state.fechaDesde || state.fechaHasta); }
+function fechaEnPeriodo(fecha) {
+  if (hayRangoFecha()) {
+    if (state.fechaDesde && fecha < state.fechaDesde) return false;
+    if (state.fechaHasta && fecha > state.fechaHasta) return false;
+    return true;
+  }
+  return state.months.has(fecha.slice(0, 7));
 }
 let LAST_EXPORT = null;
 
@@ -686,8 +712,11 @@ document.getElementById("clear-products").addEventListener("click", () => {
   zSel.value = "";
   compraSel.value = "";
   buscarInput.value = "";
-  fechaInput.value = "";
-  state.dia = null;
+  fechaDesdeInput.value = "";
+  fechaHastaInput.value = "";
+  state.fechaDesde = null;
+  state.fechaHasta = null;
+  syncQuickRangeButtons();
   mesChecks.forEach(cb => cb.disabled = false);
   state.months = new Set(MESES.length ? [MESES[MESES.length - 1].key] : []);
   mesChecks.forEach(cb => cb.checked = state.months.has(cb.value));
@@ -759,7 +788,10 @@ const compraSel = document.getElementById("f-compra");
 const buscarInput = document.getElementById("f-buscar");
 const mesChecks = document.querySelectorAll(".f-mes");
 const metricRadios = document.querySelectorAll('input[name="f-metric"]');
-const fechaInput = document.getElementById("f-fecha");
+const fechaDesdeInput = document.getElementById("f-fecha-desde");
+const fechaHastaInput = document.getElementById("f-fecha-hasta");
+const q1Btn = document.getElementById("q1-btn");
+const q2Btn = document.getElementById("q2-btn");
 
 // limites del selector de fecha, calculados de los datos reales
 let fechaMin = null, fechaMax = null;
@@ -768,7 +800,54 @@ VENTAS.forEach(row => {
   if (!fechaMin || f < fechaMin) fechaMin = f;
   if (!fechaMax || f > fechaMax) fechaMax = f;
 });
-if (fechaMin) { fechaInput.min = fechaMin; fechaInput.max = fechaMax; }
+if (fechaMin) {
+  [fechaDesdeInput, fechaHastaInput].forEach(input => { input.min = fechaMin; input.max = fechaMax; });
+}
+
+function syncQuickRangeButtons() {
+  q1Btn.classList.remove("active");
+  q2Btn.classList.remove("active");
+  if (!state.fechaDesde || !state.fechaHasta) return;
+  const mes = state.fechaDesde.slice(0, 7);
+  const finQ1 = fechaMax && `${mes}-15` > fechaMax ? fechaMax : `${mes}-15`;
+  if (state.fechaDesde === `${mes}-01` && state.fechaHasta === finQ1) q1Btn.classList.add("active");
+  const [year, month] = mes.split("-").map(Number);
+  let finMes = `${mes}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+  if (fechaMax && finMes > fechaMax) finMes = fechaMax;
+  if (state.fechaDesde === `${mes}-16` && state.fechaHasta === finMes) q2Btn.classList.add("active");
+}
+function syncDateRange(changed = "") {
+  state.fechaDesde = fechaDesdeInput.value || null;
+  state.fechaHasta = fechaHastaInput.value || null;
+  if (state.fechaDesde && state.fechaHasta && state.fechaDesde > state.fechaHasta) {
+    if (changed === "hasta") {
+      state.fechaDesde = state.fechaHasta;
+      fechaDesdeInput.value = state.fechaDesde;
+    } else {
+      state.fechaHasta = state.fechaDesde;
+      fechaHastaInput.value = state.fechaHasta;
+    }
+  }
+  mesChecks.forEach(cb => cb.disabled = hayRangoFecha());
+  syncQuickRangeButtons();
+  render();
+}
+function mesBaseQuincena() {
+  const fechaElegida = state.fechaDesde || state.fechaHasta;
+  if (fechaElegida) return fechaElegida.slice(0, 7);
+  const seleccionados = Array.from(state.months).sort();
+  return seleccionados.length ? seleccionados[seleccionados.length - 1] : (fechaMax ? fechaMax.slice(0, 7) : "");
+}
+function aplicarQuincena(numero) {
+  const mes = mesBaseQuincena();
+  if (!mes) return;
+  const [year, month] = mes.split("-").map(Number);
+  const ultimoDia = String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0");
+  const finMes = fechaMax && `${mes}-${ultimoDia}` > fechaMax ? fechaMax : `${mes}-${ultimoDia}`;
+  fechaDesdeInput.value = numero === 1 ? `${mes}-01` : `${mes}-16`;
+  fechaHastaInput.value = numero === 1 ? (fechaMax && `${mes}-15` > fechaMax ? fechaMax : `${mes}-15`) : finMes;
+  syncDateRange();
+}
 
 mesChecks.forEach(cb => cb.addEventListener("change", () => {
   state.months = new Set(Array.from(mesChecks).filter(c => c.checked).map(c => c.value));
@@ -777,15 +856,17 @@ mesChecks.forEach(cb => cb.addEventListener("change", () => {
 metricRadios.forEach(r => r.addEventListener("change", () => {
   if (r.checked) { state.metric = r.value; render(); }
 }));
-fechaInput.addEventListener("change", () => {
-  state.dia = fechaInput.value || null;
-  mesChecks.forEach(cb => cb.disabled = !!state.dia);
-  render();
-});
+fechaDesdeInput.addEventListener("change", () => syncDateRange("desde"));
+fechaHastaInput.addEventListener("change", () => syncDateRange("hasta"));
+q1Btn.addEventListener("click", () => aplicarQuincena(1));
+q2Btn.addEventListener("click", () => aplicarQuincena(2));
 document.getElementById("clear-fecha").addEventListener("click", () => {
-  fechaInput.value = "";
-  state.dia = null;
+  fechaDesdeInput.value = "";
+  fechaHastaInput.value = "";
+  state.fechaDesde = null;
+  state.fechaHasta = null;
   mesChecks.forEach(cb => cb.disabled = false);
+  syncQuickRangeButtons();
   render();
 });
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
@@ -811,11 +892,7 @@ function clientProductBreakdown(cid) {
     const [, ida, fecha, imp, kg] = row;
     if (!ventaEsDelVendedor(row, vSel.value)) return;
     if (scope && !scope.has(ida)) return;
-    if (state.dia) {
-      if (fecha !== state.dia) return;
-    } else if (!state.months.has(fecha.slice(0, 7))) {
-      return;
-    }
+    if (!fechaEnPeriodo(fecha)) return;
     let e = byArt.get(ida);
     if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
     e.importe += imp;
@@ -1073,11 +1150,7 @@ document.getElementById("export-client-products-btn").addEventListener("click", 
       const [, ida, fecha, imp, kg] = row;
       if (!ventaEsDelVendedor(row, vSel.value)) return;
       if (scope && !scope.has(ida)) return;
-      if (state.dia) {
-        if (fecha !== state.dia) return;
-      } else if (!state.months.has(fecha.slice(0, 7))) {
-        return;
-      }
+      if (!fechaEnPeriodo(fecha)) return;
       let e = byArt.get(ida);
       if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
       e.importe += imp;
@@ -1355,11 +1428,7 @@ function render() {
       const inScope = productIds.size ? productIds.has(a) : (marcaArticleIds && marcaArticleIds.has(a));
       if (!inScope) continue;
     }
-    if (state.dia) {
-      if (fecha !== state.dia) continue;
-    } else if (!months.has(fecha.slice(0, 7))) {
-      continue;
-    }
+    if (!fechaEnPeriodo(fecha)) continue;
     let e = aggByClient.get(c);
     if (!e) { e = { importe: 0, kg: 0, ultima: "" }; aggByClient.set(c, e); }
     e.importe += imp;
@@ -1376,7 +1445,7 @@ function render() {
     const [c, a, fecha, imp, kg] = row;
     if (!ventaEsDelVendedor(row, v)) continue;
     if ((!v || hayFiltroSegmentoCliente) && !salesClienteIdSet.has(c)) continue;
-    if (state.dia) { if (fecha !== state.dia) continue; } else if (!months.has(fecha.slice(0, 7))) continue;
+    if (!fechaEnPeriodo(fecha)) continue;
     if (imp === 0 && kg === 0) continue;
     const art = ART_BY_ID.get(a);
     const prov = art ? proveedorDe(art.m) : "Sin proveedor";
@@ -1585,8 +1654,10 @@ function render() {
     : (productIds.size === 0
         ? [`General de ${marcaNombre} (${marcaArticleIds.size} articulos)`]
         : Array.from(productIds).map(id => (ART_BY_ID.get(id)||{}).n).filter(Boolean));
-  const periodoTxt = state.dia
-    ? `Dia exacto: ${state.dia}`
+  const periodoTxt = hayRangoFecha()
+    ? (state.fechaDesde && state.fechaHasta
+        ? `Rango: ${state.fechaDesde} al ${state.fechaHasta}`
+        : (state.fechaDesde ? `Desde: ${state.fechaDesde}` : `Hasta: ${state.fechaHasta}`))
     : `Meses: ${Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno"}`;
   const filtrosParts = [
     v ? `Vendedor: V${v} - ${vendedoresSet.get(Number(v))} (ventas por comprobante; cartera por ruta actual)` : null,
