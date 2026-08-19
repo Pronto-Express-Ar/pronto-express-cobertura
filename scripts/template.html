@@ -483,7 +483,7 @@
   <div id="top3-results" style="display:none">
     <div class="card">
       <h2>Objetivo del mes por proveedor &mdash; +10% vs mes anterior</h2>
-      <p class="lede" style="margin-bottom:14px">Mismos clientes que la comparativa de abajo (filtros de vendedor/zona/dia/subcanal). Cada barra es ese proveedor solo, mes actual vs mes anterior.</p>
+      <p class="lede" style="margin-bottom:14px">Con vendedor seleccionado, facturacion y kilos se toman del vendedor del comprobante en Chess; la cobertura conserva la cartera de su ruta actual. Cada barra es ese proveedor solo, mes actual vs mes anterior.</p>
       <div id="top3-objetivo"></div>
     </div>
 
@@ -498,7 +498,7 @@
   </div>
 
   <div class="foot-note">
-    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. La ruta de cada cliente es la vigente al momento de generar el informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
+    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> __TOTAL_CLIENTES__ clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). __TOTAL_ARTICULOS__ articulos activos en el catalogo, agrupados en __TOTAL_LINEAS__ lineas de producto.</p>
     <p>Datos extraidos en vivo de la API de Chess ERP el __FECHA_GENERADO__ (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
@@ -564,6 +564,9 @@ const state = {
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
 function labelMagnitud() { return state.metric === "kg" ? "Kilos vendidos" : "Facturacion"; }
+function ventaEsDelVendedor(row, vendedor) {
+  return !vendedor || String(row[5] || "") === String(vendedor);
+}
 let LAST_EXPORT = null;
 
 /* ---------------- panel de productos ---------------- */
@@ -804,7 +807,9 @@ function clientProductBreakdown(cid) {
   const scope = activeArticleScope(); // null = todo el catalogo; Set = solo lo que esta filtrado
   const arr = CLIENT_VENTAS_INDEX.get(cid) || [];
   const byArt = new Map();
-  arr.forEach(([, ida, fecha, imp, kg]) => {
+  arr.forEach(row => {
+    const [, ida, fecha, imp, kg] = row;
+    if (!ventaEsDelVendedor(row, vSel.value)) return;
     if (scope && !scope.has(ida)) return;
     if (state.dia) {
       if (fecha !== state.dia) return;
@@ -1064,7 +1069,9 @@ document.getElementById("export-client-products-btn").addEventListener("click", 
   rows.forEach(r => {
     const c = r.c;
     const byArt = new Map();
-    (CLIENT_VENTAS_INDEX.get(c.id) || []).forEach(([, ida, fecha, imp, kg]) => {
+    (CLIENT_VENTAS_INDEX.get(c.id) || []).forEach(row => {
+      const [, ida, fecha, imp, kg] = row;
+      if (!ventaEsDelVendedor(row, vSel.value)) return;
       if (scope && !scope.has(ida)) return;
       if (state.dia) {
         if (fecha !== state.dia) return;
@@ -1204,24 +1211,26 @@ function computeMesActualAnterior() {
   if (arr.length < 2) return null;
   return { actual: arr[arr.length - 1], anterior: arr[arr.length - 2] };
 }
-function sumaMesesCliente(clientIdSet, articleScope, mesActual, mesAnterior) {
+function sumaMesesCliente(clientIdSet, articleScope, mesActual, mesAnterior, vendedor = "") {
   let actualImp = 0, actualKg = 0, anteriorImp = 0, anteriorKg = 0;
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
     if (clientIdSet && !clientIdSet.has(c)) continue;
     if (articleScope && !articleScope.has(a)) continue;
+    if (!ventaEsDelVendedor(row, vendedor)) continue;
     const mk = fecha.slice(0, 7);
     if (mk === mesActual) { actualImp += imp; actualKg += kg; }
     else if (mk === mesAnterior) { anteriorImp += imp; anteriorKg += kg; }
   }
   return { actualImp, actualKg, anteriorImp, anteriorKg };
 }
-function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnterior) {
+function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnterior, vendedor = "") {
   const perCliente = new Map();
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
     if (clientIdSet && !clientIdSet.has(c)) continue;
     if (articleScope && !articleScope.has(a)) continue;
+    if (!ventaEsDelVendedor(row, vendedor)) continue;
     const mk = fecha.slice(0, 7);
     if (mk !== mesActual && mk !== mesAnterior) continue;
     let e = perCliente.get(c);
@@ -1260,13 +1269,13 @@ function renderObjetivoBlock(containerId, titulo, stats) {
     ${objetivoFila("Kilos", stats.actualKg, stats.anteriorKg, kilos)}
   </div>`;
 }
-function renderTop3Objetivo(clientIdSet, mesesInfo) {
+function renderTop3Objetivo(clientIdSet, mesesInfo, vendedor = "") {
   const el = document.getElementById("top3-objetivo");
   if (!el) return;
   if (!mesesInfo) { el.innerHTML = `<p class="lede">Todavia no hay dos meses de datos para calcular el objetivo.</p>`; return; }
   el.innerHTML = TOP3_PROVEEDORES.map(prov => {
     const scope = ARTICULOS_POR_PROVEEDOR.get(prov) || new Set();
-    const stats = sumaMesesCliente(clientIdSet, scope, mesesInfo.actual, mesesInfo.anterior);
+    const stats = sumaMesesCliente(clientIdSet, scope, mesesInfo.actual, mesesInfo.anterior, vendedor);
     return `<div class="obj-block">
       <div class="obj-title">${esc(prov)}</div>
       ${objetivoFila("Facturacion", stats.actualImp, stats.anteriorImp, money)}
@@ -1311,10 +1320,37 @@ function render() {
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
 
-  // agregado por cliente segun productos + (dia exacto O meses) seleccionados
+  const v = vSel.value, d = dSel.value, zona = zSel.value, compra = compraSel.value;
+  const subcanales = state.subcanales;
+  const q = buscarInput.value.trim().toLowerCase();
+
+  // Los filtros de segmento definen el universo de clientes. El vendedor se
+  // aplica de dos maneras: ruta actual para cobertura/detalle e idVendedor del
+  // comprobante para kilos, facturacion y objetivos, igual que Chess ERP.
+  const baseFilteredClientes = [];
+  for (const c of CLIENTES) {
+    if (d && c.d !== d) continue;
+    if (subcanales.size && !subcanales.has(c.sc)) continue;
+    if (zona === "fuera" && c.z) continue;
+    if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
+    if (q && !c.n.toLowerCase().includes(q) && !String(c.id).includes(q)) continue;
+    baseFilteredClientes.push(c);
+  }
+  const salesClienteIdSet = new Set(baseFilteredClientes.map(c => c.id));
+  const hayFiltroSegmentoCliente = !!(d || subcanales.size || zona !== "todas" || q);
+  const filteredClientes = v
+    ? baseFilteredClientes.filter(c => String(c.v) === v)
+    : baseFilteredClientes;
+  const filteredClienteIdSet = new Set(filteredClientes.map(c => c.id));
+
+  // Agregado por cliente segun productos + periodo. Si hay vendedor, la venta
+  // se toma por el vendedor del comprobante, aunque hoy el cliente tenga otra ruta.
   const aggByClient = new Map();
+  let ventaDirectaImporte = 0, ventaDirectaKg = 0;
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
+    if (!ventaEsDelVendedor(row, v)) continue;
+    if ((!v || hayFiltroSegmentoCliente) && !salesClienteIdSet.has(c)) continue;
     if (!allProducts) {
       const inScope = productIds.size ? productIds.has(a) : (marcaArticleIds && marcaArticleIds.has(a));
       if (!inScope) continue;
@@ -1329,37 +1365,24 @@ function render() {
     e.importe += imp;
     e.kg += kg;
     if (fecha > e.ultima) e.ultima = fecha;
+    ventaDirectaImporte += imp;
+    ventaDirectaKg += kg;
   }
-
-  const v = vSel.value, d = dSel.value, zona = zSel.value, compra = compraSel.value;
-  const subcanales = state.subcanales;
-  const q = buscarInput.value.trim().toLowerCase();
-
-  const filteredClientes = [];
-  for (const c of CLIENTES) {
-    if (v && String(c.v) !== v) continue;
-    if (d && c.d !== d) continue;
-    if (subcanales.size && !subcanales.has(c.sc)) continue;
-    if (zona === "fuera" && c.z) continue;
-    if (zona === "Zona Paulina" && c.z !== "Zona Paulina") continue;
-    if (q && !c.n.toLowerCase().includes(q) && !String(c.id).includes(q)) continue;
-    filteredClientes.push(c);
-  }
-  const filteredClienteIdSet = new Set(filteredClientes.map(c => c.id));
 
   // estadisticas por proveedor del universo vigente, sin importar el filtro izquierdo
   const provStats = new Map();
   const skuStats = new Map();
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
-    if (!filteredClienteIdSet.has(c)) continue;
+    if (!ventaEsDelVendedor(row, v)) continue;
+    if ((!v || hayFiltroSegmentoCliente) && !salesClienteIdSet.has(c)) continue;
     if (state.dia) { if (fecha !== state.dia) continue; } else if (!months.has(fecha.slice(0, 7))) continue;
     if (imp === 0 && kg === 0) continue;
     const art = ART_BY_ID.get(a);
     const prov = art ? proveedorDe(art.m) : "Sin proveedor";
     let e = provStats.get(prov);
     if (!e) { e = { clientes: new Set(), importe: 0, kg: 0, porArticulo: new Map() }; provStats.set(prov, e); }
-    e.clientes.add(c);
+    if (filteredClienteIdSet.has(c)) e.clientes.add(c);
     e.importe += imp;
     e.kg += kg;
     let ea = e.porArticulo.get(a);
@@ -1375,50 +1398,63 @@ function render() {
       if (!sku) { sku = { importe: 0, kg: 0, porCliente: new Map() }; skuStats.set(a, sku); }
       sku.importe += imp;
       sku.kg += kg;
-      let clienteSku = sku.porCliente.get(c);
-      if (!clienteSku) { clienteSku = { importe: 0, kg: 0 }; sku.porCliente.set(c, clienteSku); }
-      clienteSku.importe += imp;
-      clienteSku.kg += kg;
+      if (filteredClienteIdSet.has(c)) {
+        let clienteSku = sku.porCliente.get(c);
+        if (!clienteSku) { clienteSku = { importe: 0, kg: 0 }; sku.porCliente.set(c, clienteSku); }
+        clienteSku.importe += imp;
+        clienteSku.kg += kg;
+      }
     }
   }
 
-  const rows = [];
-  for (const c of filteredClientes) {
-    const e = aggByClient.get(c.id);
-    const importe = e ? Math.round(e.importe * 100) / 100 : 0;
-    const kg = e ? Math.round(e.kg * 1000) / 1000 : 0;
-    const valor = isKg ? kg : importe;
-    const compro = importe > 0 || kg > 0;
-    if (compra === "si" && !compro) continue;
-    if (compra === "no" && compro) continue;
-    rows.push({ c, importe, kg, valor, compro, ultima: e ? e.ultima : 0 });
+  function armarFilas(clientes) {
+    const out = [];
+    for (const c of clientes) {
+      const e = aggByClient.get(c.id);
+      const importe = e ? Math.round(e.importe * 100) / 100 : 0;
+      const kg = e ? Math.round(e.kg * 1000) / 1000 : 0;
+      const valor = isKg ? kg : importe;
+      const compro = importe > 0 || kg > 0;
+      if (compra === "si" && !compro) continue;
+      if (compra === "no" && compro) continue;
+      out.push({ c, importe, kg, valor, compro, ultima: e ? e.ultima : 0 });
+    }
+    return out;
   }
+  const rows = armarFilas(filteredClientes); // cartera vigente del vendedor
+  const metricRows = v ? armarFilas(baseFilteredClientes) : rows; // venta real del comprobante
 
   const totalClientes = rows.length;
   const compradores = rows.filter(r => r.compro);
-  const total = compradores.reduce((s, r) => s + r.valor, 0);
+  const metricCompradores = metricRows.filter(r => r.compro);
+  const totalDirecto = isKg ? ventaDirectaKg : ventaDirectaImporte;
+  const total = compra ? metricRows.reduce((s, r) => s + r.valor, 0) : totalDirecto;
+  const totalCartera = rows.reduce((s, r) => s + r.valor, 0);
   const cobertura = totalClientes ? compradores.length / totalClientes * 100 : 0;
 
   const conRuta = rows.filter(r => r.c.d !== "Sin ruta / Online");
   const compradoresConRuta = conRuta.filter(r => r.compro);
   const coberturaRuta = conRuta.length ? compradoresConRuta.length / conRuta.length * 100 : 0;
 
-  const compradoresSorted = compradores.slice().sort((a,b) => b.valor - a.valor);
+  const compradoresSorted = metricCompradores.slice().sort((a,b) => b.valor - a.valor);
+  const totalPareto = compradoresSorted.reduce((s, r) => s + Math.max(0, r.valor), 0);
   const top10 = compradoresSorted.slice(0,10).reduce((s,r) => s + r.valor, 0);
-  const top10Pct = total ? top10 / total * 100 : 0;
+  const top10Pct = totalPareto ? top10 / totalPareto * 100 : 0;
   let acum = 0, pareto80n = 0;
   for (const r of compradoresSorted) {
     acum += r.valor; pareto80n++;
-    if (total && acum / total * 100 >= 80) break;
+    if (totalPareto && acum / totalPareto * 100 >= 80) break;
   }
 
   // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
   const mesesInfo = computeMesActualAnterior();
   let objEmpresa = null, objCurrent = null, riesgoNuevos = { riesgo: 0, nuevos: 0 };
   if (mesesInfo) {
-    objEmpresa = sumaMesesCliente(null, articleScope, mesesInfo.actual, mesesInfo.anterior);
-    objCurrent = sumaMesesCliente(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior);
-    riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior);
+    const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
+    const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
+    objEmpresa = sumaMesesCliente(todosClientesVisibles, articleScope, mesesInfo.actual, mesesInfo.anterior);
+    objCurrent = sumaMesesCliente(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
+    riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
   }
 
   // tiles
@@ -1428,12 +1464,12 @@ function render() {
         ? `General de ${esc(marcaNombre)} &mdash; ${marcaArticleIds.size} articulos`
         : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`));
   document.getElementById("tiles").innerHTML = [
-    [`${labelMagnitud()} del periodo`, fmtValor(total), productLabel],
-    ["Ticket promedio", fmtValor(compradores.length ? total / compradores.length : 0), "por cliente que compra"],
+    [v ? `${labelMagnitud()} ERP del vendedor` : `${labelMagnitud()} del periodo`, fmtValor(total), v ? "segun vendedor del comprobante" : productLabel],
+    ["Ticket promedio", fmtValor(metricCompradores.length ? total / metricCompradores.length : 0), "por cliente que compra"],
     ["Clientes en riesgo", riesgoNuevos.riesgo.toLocaleString("es-AR"), "compraban el mes anterior, este mes (a la fecha) todavia no"],
     ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
     ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
-    ["Clientes en la seleccion actual", totalClientes.toLocaleString("es-AR"), `${compradores.length} compran`],
+    [v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), v ? "segun ruta vigente del cliente" : `${compradores.length} compran`],
   ].map(([label,value,sub]) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`).join("");
 
   // objetivo del mes
@@ -1441,7 +1477,7 @@ function render() {
     renderObjetivoBlock("objetivo-empresa", `Empresa (todos los clientes) &middot; ${productLabel}`, objEmpresa);
     if (v) {
       const vNombre = vendedoresSet.get(Number(v)) || "";
-      renderObjetivoBlock("objetivo-vendedor", `Vendedor V${esc(v)} - ${esc(vNombre)} (con los filtros actuales)`, objCurrent);
+      renderObjetivoBlock("objetivo-vendedor", `Vendedor V${esc(v)} - ${esc(vNombre)} (segun comprobantes de Chess)`, objCurrent);
     } else {
       document.getElementById("objetivo-vendedor").innerHTML = "";
     }
@@ -1454,7 +1490,7 @@ function render() {
   const findings = [];
   findings.push(`<li><b>${pct(cobertura)} de cobertura</b> sobre los ${totalClientes.toLocaleString("es-AR")} clientes de la seleccion actual (${compradores.length} compran) &mdash; sobre los que tienen ruta de vendedor asignada, la cobertura es <b>${pct(coberturaRuta)}</b>.</li>`);
   if (total > 0) {
-    findings.push(`<li><b>Concentracion:</b> los 10 clientes mas grandes explican el <b>${pct(top10Pct)}</b> de ${labelMagnitud().toLowerCase()} filtrado(a); hacen falta <b>${pareto80n}</b> de los ${compradores.length} compradores para llegar al 80%.</li>`);
+    findings.push(`<li><b>Concentracion:</b> los 10 clientes mas grandes explican el <b>${pct(top10Pct)}</b> de ${labelMagnitud().toLowerCase()} filtrado(a); hacen falta <b>${pareto80n}</b> de los ${metricCompradores.length} compradores para llegar al 80%.</li>`);
   }
   if (mesesInfo && objCurrent) {
     const valAct = isKg ? objCurrent.actualKg : objCurrent.actualImp;
@@ -1504,7 +1540,7 @@ function render() {
   document.getElementById("findings").innerHTML = findings.join("\n");
 
   // pareto chart
-  document.getElementById("chart-pareto").innerHTML = paretoSVG(compradoresSorted, total);
+  document.getElementById("chart-pareto").innerHTML = paretoSVG(compradoresSorted, totalPareto);
 
   // subcanal chart
   const subcanalBarRows = scRows.map(s => ({ label: s.label, value: s.valor, valueLabel: `${fmtValor(s.valor)} &middot; ${pct(s.cobertura)} cobertura (${s.compran}/${s.total})` }));
@@ -1553,7 +1589,7 @@ function render() {
     ? `Dia exacto: ${state.dia}`
     : `Meses: ${Array.from(months).sort().map(m => mesLabelByKey.get(m) || m).join(", ") || "ninguno"}`;
   const filtrosParts = [
-    v ? `Vendedor: V${v} - ${vendedoresSet.get(Number(v))}` : null,
+    v ? `Vendedor: V${v} - ${vendedoresSet.get(Number(v))} (ventas por comprobante; cartera por ruta actual)` : null,
     d ? `Dia de ruta: ${d}` : null,
     subcanales.size ? `Subcanal: ${Array.from(subcanales).join(", ")}` : null,
     zona === "Zona Paulina" ? "Zona: Zona Paulina" : (zona === "fuera" ? "Zona: Fuera de Zona Paulina" : null),
@@ -1564,7 +1600,7 @@ function render() {
   document.getElementById("print-context").innerHTML = `
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
     <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
-    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado __FECHA_GENERADO__</div>
+    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${v ? `${labelMagnitud().toLowerCase()} ERP vendedor` : labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado __FECHA_GENERADO__</div>
   `;
 
   // resumen + tabla
@@ -1595,7 +1631,7 @@ function render() {
   }).join("");
 
   renderTop3(provStats, filteredClientes.length, isKg);
-  renderTop3Objetivo(filteredClienteIdSet, mesesInfo);
+  renderTop3Objetivo(v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet, mesesInfo, v);
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
 }

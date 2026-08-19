@@ -222,8 +222,14 @@ with open(f"{DATA_DIR}/articulos_multi.json", "w", encoding="utf-8") as f:
 ventas = json.load(open(f"{DATA_DIR}/ventas.json", encoding="utf-8"))
 print("Lineas de venta totales cargadas:", len(ventas))
 
-agg = {}  # (idc, ida, fecha "YYYY-MM-DD") -> {imp, kg}
-clientes_ids = set(clientes_out.keys())
+# Se conserva el vendedor del comprobante. No alcanza con inferirlo desde la
+# ruta actual del cliente: un cliente puede cambiar de ruta o recibir una venta
+# de otro vendedor. Chess usa idVendedor para sus informes por vendedor.
+agg = {}  # (idc, ida, fecha "YYYY-MM-DD", id_vendedor) -> {imp, kg}
+# Conservamos ventas de todos los clientes existentes en Chess. La cartera
+# visible sigue excluyendo los vendedores definidos arriba, pero una venta debe
+# permanecer disponible para cuadrar un informe por idVendedor del comprobante.
+clientes_ids = {c.get("idCliente") for c in clientes_raw if c.get("idCliente") is not None}
 articulos_ids = {a["id"] for a in articulos_out}
 meses_vistos = {}  # "YYYY-MM" -> (year, month)
 
@@ -251,19 +257,21 @@ for v in ventas:
     # pesable -> peso real de balanza (pesoTotal); no pesable -> cantidad x peso
     # estandar del articulo, ya calculado por el ERP en unimedtotal.
     kg = peso_total if peso_total else unimedtotal
+    id_vendedor = int(v.get("idVendedor") or 0)
 
-    key = (idc, ida, fecha)
+    key = (idc, ida, fecha, id_vendedor)
     e = agg.setdefault(key, {"imp": 0.0, "kg": 0.0})
     e["imp"] += importe
     e["kg"] += kg
 
 rows = []
-for (idc, ida, fecha), e in agg.items():
+for (idc, ida, fecha, id_vendedor), e in agg.items():
     imp = round(e["imp"], 2)
     kg = round(e["kg"], 3)
     if imp == 0 and kg == 0:
         continue
-    rows.append([idc, ida, fecha, imp, kg])
+    # Esquema: cliente, articulo, fecha, importe, kilos, vendedor comprobante.
+    rows.append([idc, ida, fecha, imp, kg, id_vendedor])
 
 print("Filas agregadas cliente x articulo x dia:", len(rows))
 with open(f"{DATA_DIR}/ventas_agg_multi.json", "w", encoding="utf-8") as f:
