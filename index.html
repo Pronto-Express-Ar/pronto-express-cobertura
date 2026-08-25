@@ -185,11 +185,15 @@
     margin-top: 5px;
   }
   .tile-risk { border-color: color-mix(in srgb, var(--status-warn) 45%, var(--border)); }
+  .tile-recovered { border-color: color-mix(in srgb, var(--status-good) 45%, var(--border)); }
+  .tile-trend.positive .value { color: var(--status-good); }
+  .tile-trend.negative .value { color: var(--status-crit); }
   .tile-action { font: inherit; font-size: 12px; font-weight: 600; color: var(--series-1); background: none; border: none; padding: 7px 0 0; cursor: pointer; text-decoration: underline; }
   .risk-card summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .risk-card summary::-webkit-details-marker { display: none; }
   .risk-card summary h2 { margin: 0; }
   .risk-count { color: var(--status-warn); font-size: 13px; font-weight: 700; }
+  .recovered-count { color: var(--status-good); font-size: 13px; font-weight: 700; }
   .risk-card[open] summary { margin-bottom: 12px; }
   .risk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .risk-toolbar .lede { margin: 0; flex: 1 1 520px; }
@@ -329,7 +333,8 @@
     body.print-no-detail .sidebar { display: none !important; }
     body.print-no-detail #results-empty,
     body.print-no-detail #client-detail-card,
-    body.print-no-detail #risk-clients-card { display: none !important; }
+    body.print-no-detail #risk-clients-card,
+    body.print-no-detail #recovered-clients-card { display: none !important; }
     body.print-no-detail .btn-print { display: none !important; }
     body.print-no-detail .foot-note { display: none !important; }
     body.print-no-detail .card { break-inside: avoid; }
@@ -472,6 +477,25 @@
             <th>Última compra</th><th>Producto principal anterior</th><th>Fact. anterior</th><th>Kg anterior</th>
           </tr></thead>
           <tbody id="risk-table-body"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="card risk-card" id="recovered-clients-card">
+      <summary>
+        <h2>Clientes recuperados este mes</h2>
+        <span class="recovered-count" id="recovered-count"></span>
+      </summary>
+      <div class="risk-toolbar">
+        <p class="lede" id="recovered-period"></p>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th>Código</th><th>Cliente</th><th>Vendedor</th><th>Día ruta</th><th>Subcanal</th>
+            <th>Última compra histórica</th><th>Producto principal actual</th><th>Fact. actual</th><th>Kg actuales</th>
+          </tr></thead>
+          <tbody id="recovered-table-body"></tbody>
         </table>
       </div>
     </details>
@@ -1408,16 +1432,24 @@ function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnteri
     if (articleScope && !articleScope.has(a)) continue;
     if (!ventaEsDelVendedor(row, vendedor)) continue;
     const mk = fecha.slice(0, 7);
-    if (mk !== mesActual && mk !== mesAnterior) continue;
+    if (mk > mesActual) continue;
     let e = perCliente.get(c);
     if (!e) {
-      e = { actualImp: 0, actualKg: 0, anteriorImp: 0, anteriorKg: 0, ultimaAnterior: "", porArticulo: new Map() };
+      e = {
+        actualImp: 0, actualKg: 0, anteriorImp: 0, anteriorKg: 0,
+        historicoImp: 0, historicoKg: 0, ultimaAnterior: "", ultimaHistorica: "",
+        porArticulo: new Map(), porArticuloActual: new Map()
+      };
       perCliente.set(c, e);
     }
     if (mk === mesActual) {
       e.actualImp += imp;
       e.actualKg += kg;
-    } else {
+      let artActual = e.porArticuloActual.get(a);
+      if (!artActual) { artActual = { importe: 0, kg: 0 }; e.porArticuloActual.set(a, artActual); }
+      artActual.importe += imp;
+      artActual.kg += kg;
+    } else if (mk === mesAnterior) {
       e.anteriorImp += imp;
       e.anteriorKg += kg;
       if (fecha > e.ultimaAnterior) e.ultimaAnterior = fecha;
@@ -1425,17 +1457,27 @@ function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnteri
       if (!art) { art = { importe: 0, kg: 0 }; e.porArticulo.set(a, art); }
       art.importe += imp;
       art.kg += kg;
+    } else if (mk < mesAnterior) {
+      e.historicoImp += imp;
+      e.historicoKg += kg;
+      if (fecha > e.ultimaHistorica) e.ultimaHistorica = fecha;
     }
   }
   const clientesRiesgo = [];
-  let nuevos = 0;
+  const clientesRecuperados = [];
   perCliente.forEach((e, cid) => {
     const comproAnterior = e.anteriorImp > 0 || e.anteriorKg > 0;
     const comproActual = e.actualImp > 0 || e.actualKg > 0;
+    const comproHistorico = e.historicoImp > 0 || e.historicoKg > 0;
     if (comproAnterior && !comproActual) clientesRiesgo.push({ cid, ...e });
-    if (!comproAnterior && comproActual) nuevos++;
+    if (comproHistorico && !comproAnterior && comproActual) clientesRecuperados.push({ cid, ...e });
   });
-  return { riesgo: clientesRiesgo.length, nuevos, clientesRiesgo };
+  return {
+    riesgo: clientesRiesgo.length,
+    recuperados: clientesRecuperados.length,
+    clientesRiesgo,
+    clientesRecuperados,
+  };
 }
 function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
   const card = document.getElementById("risk-clients-card");
@@ -1476,6 +1518,73 @@ function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
     </tr>`;
   }).join("") : `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px">No hay clientes en esta situación con los filtros actuales.</td></tr>`;
   return rows;
+}
+function renderClientesRecuperados(data, mesesInfo, isKg, mesLabelByKey) {
+  const card = document.getElementById("recovered-clients-card");
+  const count = document.getElementById("recovered-count");
+  const period = document.getElementById("recovered-period");
+  const tbody = document.getElementById("recovered-table-body");
+  if (!mesesInfo) {
+    card.style.display = "none";
+    return [];
+  }
+  card.style.display = "block";
+  const rows = data.clientesRecuperados.map(e => {
+    const c = CLI_BY_ID.get(e.cid);
+    if (!c) return null;
+    const top = Array.from(e.porArticuloActual.entries()).sort((a, b) => {
+      const av = isKg ? a[1].kg : a[1].importe;
+      const bv = isKg ? b[1].kg : b[1].importe;
+      return bv - av;
+    })[0];
+    const art = top ? ART_BY_ID.get(top[0]) : null;
+    return { c, ...e, topProducto: art ? art.n : "-" };
+  }).filter(Boolean).sort((a, b) => {
+    const av = isKg ? a.actualKg : a.actualImp;
+    const bv = isKg ? b.actualKg : b.actualImp;
+    return bv - av || a.c.n.localeCompare(b.c.n);
+  });
+  count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
+  const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
+  const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
+  period.innerHTML = `Compraron antes de <b>${esc(ant)}</b>, no compraron durante ese mes y volvieron en <b>${esc(act)}</b>. Respeta los filtros actuales.`;
+  tbody.innerHTML = rows.length ? rows.map(e => {
+    const c = e.c;
+    return `<tr>
+      <td>${c.id}</td><td class="name-cell">${esc(c.n)}</td>
+      <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td><td>${esc(c.d)}</td><td>${esc(c.sc)}</td>
+      <td>${esc(e.ultimaHistorica || "-")}</td><td class="name-cell">${esc(e.topProducto)}</td>
+      <td>${money(e.actualImp)}</td><td>${kilos(e.actualKg)}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px">No hay clientes recuperados con los filtros actuales.</td></tr>`;
+  return rows;
+}
+function sumaMesComparable(clientIdSet, articleScope, mesActual, mesAnterior, vendedor = "") {
+  let ultimaFechaActual = "";
+  for (const row of VENTAS) {
+    const fecha = row[2];
+    if (fecha.slice(0, 7) === mesActual && fecha > ultimaFechaActual) ultimaFechaActual = fecha;
+  }
+  const diaCorte = ultimaFechaActual ? Number(ultimaFechaActual.slice(8, 10)) : 0;
+  const [anioAnt, mesAnt] = mesAnterior.split("-").map(Number);
+  const ultimoDiaAnterior = new Date(Date.UTC(anioAnt, mesAnt, 0)).getUTCDate();
+  const corteAnterior = Math.min(diaCorte, ultimoDiaAnterior);
+  let actualImp = 0, actualKg = 0, anteriorImp = 0, anteriorKg = 0;
+  for (const row of VENTAS) {
+    const [c, a, fecha, imp, kg] = row;
+    if (clientIdSet && !clientIdSet.has(c)) continue;
+    if (articleScope && !articleScope.has(a)) continue;
+    if (!ventaEsDelVendedor(row, vendedor)) continue;
+    const mk = fecha.slice(0, 7);
+    if (mk === mesActual) {
+      actualImp += imp;
+      actualKg += kg;
+    } else if (mk === mesAnterior && Number(fecha.slice(8, 10)) <= corteAnterior) {
+      anteriorImp += imp;
+      anteriorKg += kg;
+    }
+  }
+  return { actualImp, actualKg, anteriorImp, anteriorKg, diaCorte: corteAnterior };
 }
 function objetivoFila(label, actual, anterior, fmt) {
   const objetivo = anterior * 1.10;
@@ -1678,12 +1787,14 @@ function render() {
 
   // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
   const mesesInfo = computeMesActualAnterior();
-  let objEmpresa = null, objCurrent = null, riesgoNuevos = { riesgo: 0, nuevos: 0, clientesRiesgo: [] };
+  let objEmpresa = null, objCurrent = null, comparativoCurrent = null;
+  let riesgoNuevos = { riesgo: 0, recuperados: 0, clientesRiesgo: [], clientesRecuperados: [] };
   if (mesesInfo) {
     const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
     const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
     objEmpresa = sumaMesesCliente(todosClientesVisibles, articleScope, mesesInfo.actual, mesesInfo.anterior);
     objCurrent = sumaMesesCliente(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
+    comparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
     riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
   }
 
@@ -1693,15 +1804,31 @@ function render() {
     : (productIds.size === 0
         ? `General de ${esc(marcaNombre)} &mdash; ${marcaArticleIds.size} articulos`
         : (productIds.size === 1 ? esc((ART_BY_ID.get(Array.from(productIds)[0])||{}).n || "") : `${productIds.size} articulos seleccionados`));
-  document.getElementById("tiles").innerHTML = [
-    [v ? `${labelMagnitud()} ERP del vendedor` : `${labelMagnitud()} del periodo`, fmtValor(total), v ? "segun vendedor del comprobante" : productLabel],
-    ["Ticket promedio", fmtValor(metricCompradores.length ? total / metricCompradores.length : 0), "por cliente que compra"],
-    ["Clientes en riesgo", riesgoNuevos.riesgo.toLocaleString("es-AR"), "compraban el mes anterior, este mes (a la fecha) todavia no"],
-    ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
-    ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
-    [v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), v ? "segun ruta vigente del cliente" : `${compradores.length} compran`],
-  ].map(([label,value,sub], i) => `<div class="tile${i === 2 ? " tile-risk" : ""}"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div>${i === 2 ? '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' : ""}</div>`).join("");
+  const actualComparable = comparativoCurrent ? (isKg ? comparativoCurrent.actualKg : comparativoCurrent.actualImp) : 0;
+  const anteriorComparable = comparativoCurrent ? (isKg ? comparativoCurrent.anteriorKg : comparativoCurrent.anteriorImp) : 0;
+  const variacionComparable = anteriorComparable
+    ? (actualComparable - anteriorComparable) / Math.abs(anteriorComparable) * 100
+    : null;
+  const variacionValor = variacionComparable === null
+    ? "Sin base"
+    : `${variacionComparable >= 0 ? "+" : ""}${variacionComparable.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  const mesAnteriorLabel = mesesInfo ? (mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior) : "mes anterior";
+  const comparativoSub = comparativoCurrent
+    ? `vs ${esc(mesAnteriorLabel)} hasta el dia ${comparativoCurrent.diaCorte} &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
+    : "se calcula cuando hay dos meses disponibles";
+  const tiles = [
+    { label: v ? `${labelMagnitud()} ERP del vendedor` : `${labelMagnitud()} del periodo`, value: fmtValor(total), sub: v ? "segun vendedor del comprobante" : productLabel },
+    { label: "Ticket promedio", value: fmtValor(metricCompradores.length ? total / metricCompradores.length : 0), sub: "por cliente que compra" },
+    { label: "Clientes en riesgo", value: riesgoNuevos.riesgo.toLocaleString("es-AR"), sub: "compraban el mes anterior, este mes (a la fecha) todavia no", cls: "tile-risk", action: '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' },
+    { label: "Cobertura sobre clientes en ruta", value: pct(coberturaRuta), sub: `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V` },
+    { label: "Concentracion top 10 clientes", value: pct(top10Pct), sub: "del total filtrado" },
+    { label: v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", value: v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), sub: v ? "segun ruta vigente del cliente" : `${compradores.length} compran` },
+    { label: `Variacion de ${labelMagnitud().toLowerCase()}`, value: variacionValor, sub: comparativoSub, cls: `tile-trend ${variacionComparable !== null && variacionComparable < 0 ? "negative" : "positive"}` },
+    { label: "Clientes recuperados", value: riesgoNuevos.recuperados.toLocaleString("es-AR"), sub: "compraban antes, no compraron el mes anterior y volvieron este mes", cls: "tile-recovered", action: '<button class="tile-action" id="show-recovered-btn" type="button">Ver listado de clientes</button>' },
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(item => `<div class="tile ${item.cls || ""}"><div class="label">${item.label}</div><div class="value">${item.value}</div><div class="sub">${item.sub}</div>${item.action || ""}</div>`).join("");
   const riskRows = renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
+  renderClientesRecuperados(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
 
   // objetivo del mes
   if (mesesInfo) {
@@ -1871,8 +1998,10 @@ function render() {
 }
 
 document.getElementById("tiles").addEventListener("click", (event) => {
-  if (!event.target.closest("#show-risk-btn")) return;
-  const card = document.getElementById("risk-clients-card");
+  const riskButton = event.target.closest("#show-risk-btn");
+  const recoveredButton = event.target.closest("#show-recovered-btn");
+  if (!riskButton && !recoveredButton) return;
+  const card = document.getElementById(riskButton ? "risk-clients-card" : "recovered-clients-card");
   card.open = true;
   card.scrollIntoView({ behavior: "smooth", block: "start" });
 });
