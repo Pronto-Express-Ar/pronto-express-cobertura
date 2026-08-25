@@ -412,9 +412,6 @@
         <label for="f-dia">Dia de ruta</label>
         <select id="f-dia">
           <option value="">Todos</option>
-          <option>Lunes</option><option>Martes</option><option>Miercoles</option>
-          <option>Jueves</option><option>Viernes</option>
-          <option value="Sin ruta / Online">Sin ruta / Online</option>
         </select>
       </div>
       <div class="filter-group">
@@ -560,7 +557,7 @@
   </div>
 
   <div class="foot-note">
-    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
+    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Las rutas especiales se clasifican por <code>desRuta</code> y <code>desModoAtencion</code> de Chess (Telefonica, Mostrador / Personales, Online / Mostrador, Online o Mostrador) y ya no se mezclan con "Sin ruta". Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> __TOTAL_CLIENTES__ clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). __TOTAL_ARTICULOS__ articulos activos en el catalogo, agrupados en __TOTAL_LINEAS__ lineas de producto.</p>
     <p>Datos extraidos en vivo de la API de Chess ERP el __FECHA_GENERADO__ (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
@@ -830,6 +827,16 @@ subcanalChecks.forEach(cb => cb.addEventListener("change", () => {
 }));
 
 const dSel = document.getElementById("f-dia");
+const DIA_RUTA_ORDEN = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Telefónica", "Mostrador / Personales", "Online / Mostrador", "Online", "Mostrador", "Sin ruta"];
+const diasRutaDisponibles = Array.from(new Set(CLIENTES.map(c => c.d).filter(Boolean))).sort((a, b) => {
+  const ia = DIA_RUTA_ORDEN.indexOf(a), ib = DIA_RUTA_ORDEN.indexOf(b);
+  return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+});
+diasRutaDisponibles.forEach(dia => {
+  const opt = document.createElement("option");
+  opt.value = dia; opt.textContent = dia;
+  dSel.appendChild(opt);
+});
 const zSel = document.getElementById("f-zona");
 const compraSel = document.getElementById("f-compra");
 const buscarInput = document.getElementById("f-buscar");
@@ -1644,7 +1651,8 @@ function render() {
   const totalCartera = rows.reduce((s, r) => s + r.valor, 0);
   const cobertura = totalClientes ? compradores.length / totalClientes * 100 : 0;
 
-  const conRuta = rows.filter(r => r.c.d !== "Sin ruta / Online");
+  const diasSemana = new Set(["Lunes", "Martes", "Miercoles", "Jueves", "Viernes"]);
+  const conRuta = rows.filter(r => diasSemana.has(r.c.d));
   const compradoresConRuta = conRuta.filter(r => r.compro);
   const coberturaRuta = conRuta.length ? compradoresConRuta.length / conRuta.length * 100 : 0;
 

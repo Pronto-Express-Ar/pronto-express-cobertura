@@ -8,6 +8,8 @@ datasets compactos que consume build_html.py / template.html:
 import json
 import os
 
+from route_classification import categoria_ruta_especial, seleccionar_rutas_vigentes
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 
@@ -58,17 +60,28 @@ def zona_de(lon, lat):
 # ---------- Rutas / vendedores ----------
 rutas = json.load(open(f"{DATA_DIR}/rutas.json", encoding="utf-8"))
 rutas = [r for r in rutas if "idRuta" in r]
+ruta_por_id = seleccionar_rutas_vigentes(rutas)
 vendedor_nombre = {}
-for r in rutas:
-    if r.get("anulado"):
-        continue
+for r in ruta_por_id.values():
     pid = r.get("idPersonal", 0)
     if pid and pid > 0:
         vendedor_nombre[pid] = r.get("desPersonal", "").strip()
 
 
 def ruta_info(id_ruta):
-    if id_ruta is None or id_ruta == 9999 or id_ruta == 0 or id_ruta >= 1000:
+    if id_ruta is None or id_ruta == 0:
+        return None
+    id_ruta = int(id_ruta)
+    ruta = ruta_por_id.get(id_ruta)
+    categoria_especial = categoria_ruta_especial(ruta)
+    if categoria_especial:
+        return {
+            "vendedorNum": None,
+            "vendedorNombre": None,
+            "diaNombre": categoria_especial,
+            "esDiaSemana": False,
+        }
+    if id_ruta == 9999 or id_ruta >= 1000:
         return None
     vendedor_num = id_ruta // 10
     dia = id_ruta % 10
@@ -131,7 +144,7 @@ for cli in clientes_raw:
         "sc": (cli.get("desSubcanalMkt") or "SIN SUBCANAL").strip() or "SIN SUBCANAL",
         "v": info["vendedorNum"] if info and info["esDiaSemana"] else None,
         "vn": info["vendedorNombre"] if info and info["esDiaSemana"] else None,
-        "d": info["diaNombre"] if info and info["esDiaSemana"] else "Sin ruta / Online",
+        "d": info["diaNombre"] if info else "Sin ruta",
         "z": zona_de(lon, lat),
     }
 
