@@ -71,7 +71,7 @@
     padding: 28px 20px 64px;
     line-height: 1.5;
   }
-  .wrap { max-width: 1320px; margin: 0 auto; }
+  .wrap { max-width: 1680px; margin: 0 auto; }
 
   .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
   .sidebar {
@@ -185,7 +185,9 @@
   .risk-card summary h2 { margin: 0; }
   .risk-count { color: var(--status-warn); font-size: 13px; font-weight: 700; }
   .risk-card[open] summary { margin-bottom: 12px; }
-  .risk-card .table-scroll { max-height: 480px; }
+  .risk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .risk-toolbar .lede { margin: 0; flex: 1 1 520px; }
+  .risk-card .table-scroll { max-height: 760px; }
   @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 
   ul.findings { margin: 0; padding-left: 20px; }
@@ -224,8 +226,23 @@
   table.data-table tr.client-row { cursor: pointer; }
   table.data-table tr.client-row.expanded td { background: var(--series-1-wash); }
   .table-scroll { max-height: 520px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
-  #client-detail-card .table-scroll { max-height: 760px; }
-  @media (max-width: 900px) { #client-detail-card .table-scroll { max-height: 68vh; } }
+  #client-detail-card .table-scroll { max-height: 900px; }
+  .risk-card table.data-table, #client-detail-card table.data-table { table-layout: fixed; }
+  .risk-card table.data-table th, .risk-card table.data-table td,
+  #client-detail-card table.data-table th, #client-detail-card table.data-table td { overflow-wrap: anywhere; padding-left: 6px; padding-right: 6px; }
+  .risk-card table.data-table th:nth-child(1) { width: 7%; }
+  .risk-card table.data-table th:nth-child(2) { width: 13%; }
+  .risk-card table.data-table th:nth-child(3) { width: 15%; }
+  .risk-card table.data-table th:nth-child(4) { width: 8%; }
+  .risk-card table.data-table th:nth-child(5) { width: 11%; }
+  .risk-card table.data-table th:nth-child(6) { width: 9%; }
+  .risk-card table.data-table th:nth-child(7) { width: 18%; }
+  .risk-card table.data-table th:nth-child(8) { width: 10%; }
+  .risk-card table.data-table th:nth-child(9) { width: 9%; }
+  @media (max-width: 900px) {
+    .risk-card .table-scroll, #client-detail-card .table-scroll { max-height: 72vh; }
+    .risk-card table.data-table, #client-detail-card table.data-table { table-layout: auto; min-width: 980px; }
+  }
 
   tr.client-products-row td { padding: 0; border-bottom: 1px solid var(--gridline); }
   .cp-box { padding: 10px 16px 12px 34px; background: var(--page); max-height: 260px; overflow-y: auto; }
@@ -441,7 +458,10 @@
         <h2>Clientes que compraron el mes anterior y todavía no compraron este mes</h2>
         <span class="risk-count" id="risk-count"></span>
       </summary>
-      <p class="lede" id="risk-period" style="margin-bottom:10px"></p>
+      <div class="risk-toolbar">
+        <p class="lede" id="risk-period"></p>
+        <button class="btn-link btn-print" id="export-risk-btn" type="button">&#128190; Exportar a Excel</button>
+      </div>
       <div class="table-scroll">
         <table class="data-table">
           <thead><tr>
@@ -620,6 +640,7 @@ function fechaEnPeriodo(fecha) {
   return state.months.has(fecha.slice(0, 7));
 }
 let LAST_EXPORT = null;
+let LAST_RISK_EXPORT = null;
 
 /* ---------------- panel de productos ---------------- */
 const groupsEl = document.getElementById("product-groups");
@@ -1163,6 +1184,45 @@ document.getElementById("export-btn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+document.getElementById("export-risk-btn").addEventListener("click", () => {
+  if (!LAST_RISK_EXPORT || !LAST_RISK_EXPORT.mesesInfo) return;
+  const { rows, productNames, filtrosParts, mesesInfo, mesLabelByKey } = LAST_RISK_EXPORT;
+  const mesAnterior = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
+  const mesActual = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
+  const metaLines = [
+    `Clientes que compraron en ${mesAnterior} y todavía no compraron en ${mesActual} a la fecha`,
+    `Producto(s): ${productNames.join(", ")}`,
+    `Filtros: ${filtrosParts.join(" | ") || "Sin filtros adicionales"}`,
+    `${rows.length} clientes en riesgo | Pronto Express - generado __FECHA_GENERADO__`,
+  ];
+  const headers = ["Codigo", "Cliente", "Vendedor", "Dia ruta", "Subcanal MKT", "Ultima compra", "Producto principal anterior", "Facturacion anterior", "Kilos anteriores"];
+  const dataRows = rows.map(e => {
+    const c = e.c;
+    return [
+      { t: "n", v: c.id },
+      { t: "s", v: c.n },
+      { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
+      { t: "s", v: c.d },
+      { t: "s", v: c.sc },
+      { t: "s", v: e.ultimaAnterior || "" },
+      { t: "s", v: e.topProducto || "" },
+      { t: "n", v: Math.round(e.anteriorImp * 100) / 100 },
+      { t: "n", v: Math.round(e.anteriorKg * 1000) / 1000 },
+    ];
+  });
+  const sheetXml = xlsxSheetXml(metaLines, headers, dataRows);
+  const blob = buildXlsx(sheetXml);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `clientes_en_riesgo_${fecha}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
 document.getElementById("export-client-products-btn").addEventListener("click", () => {
   if (!LAST_EXPORT) return;
   const { rows, productNames, periodoTxt, filtrosParts } = LAST_EXPORT;
@@ -1367,7 +1427,7 @@ function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
   const tbody = document.getElementById("risk-table-body");
   if (!mesesInfo) {
     card.style.display = "none";
-    return;
+    return [];
   }
   card.style.display = "block";
   const rows = data.clientesRiesgo.map(e => {
@@ -1398,6 +1458,7 @@ function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
       <td>${money(e.anteriorImp)}</td><td>${kilos(e.anteriorKg)}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px">No hay clientes en esta situación con los filtros actuales.</td></tr>`;
+  return rows;
 }
 function objetivoFila(label, actual, anterior, fmt) {
   const objetivo = anterior * 1.10;
@@ -1622,7 +1683,7 @@ function render() {
     ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
     [v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), v ? "segun ruta vigente del cliente" : `${compradores.length} compran`],
   ].map(([label,value,sub], i) => `<div class="tile${i === 2 ? " tile-risk" : ""}"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div>${i === 2 ? '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' : ""}</div>`).join("");
-  renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
+  const riskRows = renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
 
   // objetivo del mes
   if (mesesInfo) {
@@ -1788,6 +1849,7 @@ function render() {
   renderTop3Objetivo(v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet, mesesInfo, v);
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
+  LAST_RISK_EXPORT = { rows: riskRows, productNames, filtrosParts, mesesInfo, mesLabelByKey };
 }
 
 document.getElementById("tiles").addEventListener("click", (event) => {
