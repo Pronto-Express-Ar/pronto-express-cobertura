@@ -178,6 +178,14 @@
   .tile .label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
   .tile .value { font-size: 24px; font-weight: 600; }
   .tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .tile-risk { border-color: color-mix(in srgb, var(--status-warn) 45%, var(--border)); }
+  .tile-action { font: inherit; font-size: 12px; font-weight: 600; color: var(--series-1); background: none; border: none; padding: 7px 0 0; cursor: pointer; text-decoration: underline; }
+  .risk-card summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .risk-card summary::-webkit-details-marker { display: none; }
+  .risk-card summary h2 { margin: 0; }
+  .risk-count { color: var(--status-warn); font-size: 13px; font-weight: 700; }
+  .risk-card[open] summary { margin-bottom: 12px; }
+  .risk-card .table-scroll { max-height: 480px; }
   @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 
   ul.findings { margin: 0; padding-left: 20px; }
@@ -297,7 +305,8 @@
     body.print-no-detail .layout { display: block !important; }
     body.print-no-detail .sidebar { display: none !important; }
     body.print-no-detail #results-empty,
-    body.print-no-detail #client-detail-card { display: none !important; }
+    body.print-no-detail #client-detail-card,
+    body.print-no-detail #risk-clients-card { display: none !important; }
     body.print-no-detail .btn-print { display: none !important; }
     body.print-no-detail .foot-note { display: none !important; }
     body.print-no-detail .card { break-inside: avoid; }
@@ -426,6 +435,23 @@
 
     <div class="print-only" id="print-context"></div>
     <div class="tiles" id="tiles"></div>
+
+    <details class="card risk-card" id="risk-clients-card">
+      <summary>
+        <h2>Clientes que compraron el mes anterior y todavía no compraron este mes</h2>
+        <span class="risk-count" id="risk-count"></span>
+      </summary>
+      <p class="lede" id="risk-period" style="margin-bottom:10px"></p>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th>Código</th><th>Cliente</th><th>Vendedor</th><th>Día ruta</th><th>Subcanal</th>
+            <th>Última compra</th><th>Producto principal anterior</th><th>Fact. anterior</th><th>Kg anterior</th>
+          </tr></thead>
+          <tbody id="risk-table-body"></tbody>
+        </table>
+      </div>
+    </details>
 
     <div class="card" id="client-detail-card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
@@ -1307,15 +1333,71 @@ function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnteri
     const mk = fecha.slice(0, 7);
     if (mk !== mesActual && mk !== mesAnterior) continue;
     let e = perCliente.get(c);
-    if (!e) { e = { actual: 0, anterior: 0 }; perCliente.set(c, e); }
-    if (mk === mesActual) e.actual += imp; else e.anterior += imp;
+    if (!e) {
+      e = { actualImp: 0, actualKg: 0, anteriorImp: 0, anteriorKg: 0, ultimaAnterior: "", porArticulo: new Map() };
+      perCliente.set(c, e);
+    }
+    if (mk === mesActual) {
+      e.actualImp += imp;
+      e.actualKg += kg;
+    } else {
+      e.anteriorImp += imp;
+      e.anteriorKg += kg;
+      if (fecha > e.ultimaAnterior) e.ultimaAnterior = fecha;
+      let art = e.porArticulo.get(a);
+      if (!art) { art = { importe: 0, kg: 0 }; e.porArticulo.set(a, art); }
+      art.importe += imp;
+      art.kg += kg;
+    }
   }
-  let riesgo = 0, nuevos = 0;
-  perCliente.forEach(e => {
-    if (e.anterior > 0 && e.actual <= 0) riesgo++;
-    if (e.anterior <= 0 && e.actual > 0) nuevos++;
+  const clientesRiesgo = [];
+  let nuevos = 0;
+  perCliente.forEach((e, cid) => {
+    const comproAnterior = e.anteriorImp > 0 || e.anteriorKg > 0;
+    const comproActual = e.actualImp > 0 || e.actualKg > 0;
+    if (comproAnterior && !comproActual) clientesRiesgo.push({ cid, ...e });
+    if (!comproAnterior && comproActual) nuevos++;
   });
-  return { riesgo, nuevos };
+  return { riesgo: clientesRiesgo.length, nuevos, clientesRiesgo };
+}
+function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
+  const card = document.getElementById("risk-clients-card");
+  const count = document.getElementById("risk-count");
+  const period = document.getElementById("risk-period");
+  const tbody = document.getElementById("risk-table-body");
+  if (!mesesInfo) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  const rows = data.clientesRiesgo.map(e => {
+    const c = CLI_BY_ID.get(e.cid);
+    if (!c) return null;
+    const top = Array.from(e.porArticulo.entries()).sort((a, b) => {
+      const av = isKg ? a[1].kg : a[1].importe;
+      const bv = isKg ? b[1].kg : b[1].importe;
+      return bv - av;
+    })[0];
+    const art = top ? ART_BY_ID.get(top[0]) : null;
+    return { c, ...e, topProducto: art ? art.n : "-" };
+  }).filter(Boolean).sort((a, b) => {
+    const av = isKg ? a.anteriorKg : a.anteriorImp;
+    const bv = isKg ? b.anteriorKg : b.anteriorImp;
+    return bv - av || a.c.n.localeCompare(b.c.n);
+  });
+  count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
+  const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
+  const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
+  period.innerHTML = `<b>${esc(ant)}</b> vs <b>${esc(act)} a la fecha</b>. Respeta los filtros de producto/proveedor, vendedor, zona, día de ruta, subcanal y búsqueda de cliente.`;
+  tbody.innerHTML = rows.length ? rows.map(e => {
+    const c = e.c;
+    return `<tr>
+      <td>${c.id}</td><td class="name-cell">${esc(c.n)}</td>
+      <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td><td>${esc(c.d)}</td><td>${esc(c.sc)}</td>
+      <td>${esc(e.ultimaAnterior || "-")}</td><td class="name-cell">${esc(e.topProducto)}</td>
+      <td>${money(e.anteriorImp)}</td><td>${kilos(e.anteriorKg)}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px">No hay clientes en esta situación con los filtros actuales.</td></tr>`;
 }
 function objetivoFila(label, actual, anterior, fmt) {
   const objetivo = anterior * 1.10;
@@ -1517,7 +1599,7 @@ function render() {
 
   // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
   const mesesInfo = computeMesActualAnterior();
-  let objEmpresa = null, objCurrent = null, riesgoNuevos = { riesgo: 0, nuevos: 0 };
+  let objEmpresa = null, objCurrent = null, riesgoNuevos = { riesgo: 0, nuevos: 0, clientesRiesgo: [] };
   if (mesesInfo) {
     const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
     const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
@@ -1539,7 +1621,8 @@ function render() {
     ["Cobertura sobre clientes en ruta", pct(coberturaRuta), `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V`],
     ["Concentracion top 10 clientes", pct(top10Pct), "del total filtrado"],
     [v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), v ? "segun ruta vigente del cliente" : `${compradores.length} compran`],
-  ].map(([label,value,sub]) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`).join("");
+  ].map(([label,value,sub], i) => `<div class="tile${i === 2 ? " tile-risk" : ""}"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div>${i === 2 ? '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' : ""}</div>`).join("");
+  renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
 
   // objetivo del mes
   if (mesesInfo) {
@@ -1706,6 +1789,13 @@ function render() {
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
 }
+
+document.getElementById("tiles").addEventListener("click", (event) => {
+  if (!event.target.closest("#show-risk-btn")) return;
+  const card = document.getElementById("risk-clients-card");
+  card.open = true;
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 render();
 </script>
