@@ -488,6 +488,7 @@
       </summary>
       <div class="risk-toolbar">
         <p class="lede" id="recovered-period"></p>
+        <button class="btn-link btn-print" id="export-recovered-btn" type="button">&#128190; Exportar a Excel</button>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -668,6 +669,7 @@ function fechaEnPeriodo(fecha) {
 }
 let LAST_EXPORT = null;
 let LAST_RISK_EXPORT = null;
+let LAST_RECOVERED_EXPORT = null;
 
 /* ---------------- panel de productos ---------------- */
 const groupsEl = document.getElementById("product-groups");
@@ -1260,6 +1262,45 @@ document.getElementById("export-risk-btn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+document.getElementById("export-recovered-btn").addEventListener("click", () => {
+  if (!LAST_RECOVERED_EXPORT || !LAST_RECOVERED_EXPORT.mesesInfo) return;
+  const { rows, productNames, filtrosParts, mesesInfo, mesLabelByKey } = LAST_RECOVERED_EXPORT;
+  const mesAnterior = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
+  const mesActual = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
+  const metaLines = [
+    `Clientes recuperados en ${mesActual}: compraron antes de ${mesAnterior}, no compraron durante ${mesAnterior} y volvieron este mes`,
+    `Producto(s): ${productNames.join(", ")}`,
+    `Filtros: ${filtrosParts.join(" | ") || "Sin filtros adicionales"}`,
+    `${rows.length} clientes recuperados | Pronto Express - generado __FECHA_GENERADO__`,
+  ];
+  const headers = ["Codigo", "Cliente", "Vendedor", "Dia ruta", "Subcanal MKT", "Ultima compra historica", "Producto principal actual", "Facturacion actual", "Kilos actuales"];
+  const dataRows = rows.map(e => {
+    const c = e.c;
+    return [
+      { t: "n", v: c.id },
+      { t: "s", v: c.n },
+      { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
+      { t: "s", v: c.d },
+      { t: "s", v: c.sc },
+      { t: "s", v: e.ultimaHistorica || "" },
+      { t: "s", v: e.topProducto || "" },
+      { t: "n", v: Math.round(e.actualImp * 100) / 100 },
+      { t: "n", v: Math.round(e.actualKg * 1000) / 1000 },
+    ];
+  });
+  const sheetXml = xlsxSheetXml(metaLines, headers, dataRows);
+  const blob = buildXlsx(sheetXml);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `clientes_recuperados_${fecha}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
 document.getElementById("export-client-products-btn").addEventListener("click", () => {
   if (!LAST_EXPORT) return;
   const { rows, productNames, periodoTxt, filtrosParts } = LAST_EXPORT;
@@ -1824,7 +1865,7 @@ function render() {
   ];
   document.getElementById("tiles").innerHTML = tiles.map(item => `<div class="tile ${item.cls || ""}"><div class="label">${item.label}</div><div class="value">${item.value}</div><div class="sub">${item.sub}</div>${item.action || ""}</div>`).join("");
   const riskRows = renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
-  renderClientesRecuperados(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
+  const recoveredRows = renderClientesRecuperados(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
 
   // objetivo del mes
   if (mesesInfo) {
@@ -1991,6 +2032,7 @@ function render() {
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
   LAST_RISK_EXPORT = { rows: riskRows, productNames, filtrosParts, mesesInfo, mesLabelByKey };
+  LAST_RECOVERED_EXPORT = { rows: recoveredRows, productNames, filtrosParts, mesesInfo, mesLabelByKey };
 }
 
 document.getElementById("tiles").addEventListener("click", (event) => {
