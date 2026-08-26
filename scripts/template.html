@@ -300,10 +300,11 @@
   }
   .btn-print:hover { background: var(--page); }
 
-  .tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
   .tab-btn {
     font: inherit; font-size: 13.5px; font-weight: 600; padding: 10px 16px; margin-bottom: -1px;
     border: none; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
   }
   .tab-btn:hover { color: var(--text-primary); }
   .tab-btn.active { color: var(--series-1); border-bottom-color: var(--series-1); }
@@ -474,6 +475,7 @@
 
   <div class="tabs">
     <button class="tab-btn active" id="tab-general" type="button">Vista general</button>
+    <button class="tab-btn" id="tab-analysis" type="button">An&aacute;lisis avanzado</button>
     <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
   </div>
 
@@ -485,6 +487,13 @@
 
     <div class="print-only" id="print-context"></div>
     <div class="tiles" id="tiles"></div>
+
+    <div class="card" id="objetivo-card">
+      <h2>Objetivo del mes &mdash; +10% vs mes anterior</h2>
+      <p class="lede" style="margin-bottom:14px">Compara el mes en curso (a la fecha) contra el mes anterior completo, con una meta de crecimiento del 10%. No depende de los meses tildados en el filtro: siempre compara el ultimo mes con datos contra el anterior.</p>
+      <div id="objetivo-empresa"></div>
+      <div id="objetivo-vendedor"></div>
+    </div>
 
     <details class="card risk-card" id="risk-clients-card">
       <summary>
@@ -551,13 +560,9 @@
       </div>
     </div>
 
-    <div class="card" id="objetivo-card">
-      <h2>Objetivo del mes &mdash; +10% vs mes anterior</h2>
-      <p class="lede" style="margin-bottom:14px">Compara el mes en curso (a la fecha) contra el mes anterior completo, con una meta de crecimiento del 10%. No depende de los meses tildados en el filtro: siempre compara el ultimo mes con datos contra el anterior.</p>
-      <div id="objetivo-empresa"></div>
-      <div id="objetivo-vendedor"></div>
-    </div>
+  </div>
 
+  <div id="analysis-results" style="display:none">
     <div class="card">
       <h2>Hallazgos</h2>
       <ul class="findings" id="findings"></ul>
@@ -1021,14 +1026,19 @@ document.getElementById("clear-fecha").addEventListener("click", () => {
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
 
-/* ---------------- pestanas (vista general / top 3 proveedores) ---------------- */
+/* ---------------- pestanas (vista general / analisis avanzado / top 3) ---------------- */
 const TOP3_PROVEEDORES = ["LA PAULINA", "SODECAR", "ORALI"];
+let activeTab = "general";
 document.getElementById("tab-general").addEventListener("click", () => switchTab("general"));
+document.getElementById("tab-analysis").addEventListener("click", () => switchTab("analysis"));
 document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
 function switchTab(tab) {
+  activeTab = tab;
   document.getElementById("tab-general").classList.toggle("active", tab === "general");
+  document.getElementById("tab-analysis").classList.toggle("active", tab === "analysis");
   document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
   document.getElementById("results").style.display = tab === "general" ? "block" : "none";
+  document.getElementById("analysis-results").style.display = tab === "analysis" ? "block" : "none";
   document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
 }
 
@@ -1817,7 +1827,9 @@ function render() {
   const mesLabelByKey = new Map(MESES.map(m => [m.key, m.label]));
   const months = state.months;
   document.getElementById("results-empty").style.display = "none";
-  document.getElementById("results").style.display = "block";
+  document.getElementById("results").style.display = activeTab === "general" ? "block" : "none";
+  document.getElementById("analysis-results").style.display = activeTab === "analysis" ? "block" : "none";
+  document.getElementById("top3-results").style.display = activeTab === "top3" ? "block" : "none";
 
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
