@@ -184,7 +184,12 @@
     color: var(--text-secondary);
     margin-top: 5px;
   }
-  .tile-risk { border-color: color-mix(in srgb, var(--status-warn) 45%, var(--border)); }
+  .tile-risk {
+    border-color: color-mix(in srgb, var(--status-crit) 65%, var(--border));
+    background: color-mix(in srgb, var(--status-crit-bg) 35%, var(--surface-1));
+  }
+  .tile-risk .label, .tile-risk .value { color: var(--status-crit); }
+  .tile-risk .tile-action { color: var(--status-crit); }
   .tile-recovered { border-color: color-mix(in srgb, var(--status-good) 45%, var(--border)); }
   .tile-trend.positive .value { color: var(--status-good); }
   .tile-trend.negative .value { color: var(--status-crit); }
@@ -192,7 +197,9 @@
   .risk-card summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .risk-card summary::-webkit-details-marker { display: none; }
   .risk-card summary h2 { margin: 0; }
-  .risk-count { color: var(--status-warn); font-size: 13px; font-weight: 700; }
+  #risk-clients-card { border-color: color-mix(in srgb, var(--status-crit) 60%, var(--border)); }
+  #risk-clients-card summary h2, .risk-count { color: var(--status-crit); }
+  .risk-count { font-size: 13px; font-weight: 700; }
   .recovered-count { color: var(--status-good); font-size: 13px; font-weight: 700; }
   .risk-card[open] summary { margin-bottom: 12px; }
   .risk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
