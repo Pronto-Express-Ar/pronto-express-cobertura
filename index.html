@@ -172,6 +172,13 @@
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
   }
   .quick-range-btn:hover, .quick-range-btn.active { border-color: var(--series-1); background: var(--series-1-wash); }
+  .comparison-box {
+    border: 1px solid var(--border); border-radius: 9px; padding: 9px;
+    background: var(--page);
+  }
+  .comparison-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .comparison-pair select { width: 100%; min-width: 0; }
+  .comparison-note { color: var(--text-secondary); font-size: 11.5px; line-height: 1.4; margin-top: 7px; }
 
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
   .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px; }
@@ -402,6 +409,16 @@
       <div class="filter-group">
         <label>Meses incluidos</label>
         <div class="pill-toggles" id="month-toggles"></div>
+      </div>
+      <div class="filter-group">
+        <label>Comparativa de clientes <span style="font-weight:400">(riesgo y recuperados)</span></label>
+        <div class="comparison-box">
+          <div class="comparison-pair">
+            <label>Mes base<select id="f-compare-base"></select></label>
+            <label>Mes comparado<select id="f-compare-current"></select></label>
+          </div>
+          <div class="comparison-note">El mes base debe ser anterior. Esta selección no modifica los demás gráficos.</div>
+        </div>
       </div>
       <div class="filter-group">
         <label>Rango de fechas <span style="font-weight:400">(pisa los meses)</span></label>
@@ -659,6 +676,8 @@ ARTICULOS.forEach(a => { (LINEAS[a.l] = LINEAS[a.l] || []).push(a); });
 const state = {
   productIds: new Set(),
   months: new Set(MESES.length ? [MESES[MESES.length - 1].key] : []), // mes en curso por defecto
+  compareBase: MESES.length > 1 ? MESES[MESES.length - 2].key : (MESES[0]?.key || ""),
+  compareCurrent: MESES.length ? MESES[MESES.length - 1].key : "",
   fechaDesde: null,
   fechaHasta: null,
   subcanales: new Set(),
@@ -808,6 +827,10 @@ document.getElementById("clear-products").addEventListener("click", () => {
   mesChecks.forEach(cb => cb.disabled = false);
   state.months = new Set(MESES.length ? [MESES[MESES.length - 1].key] : []);
   mesChecks.forEach(cb => cb.checked = state.months.has(cb.value));
+  state.compareBase = MESES.length > 1 ? MESES[MESES.length - 2].key : (MESES[0]?.key || "");
+  state.compareCurrent = MESES.length ? MESES[MESES.length - 1].key : "";
+  compareBaseSel.value = state.compareBase;
+  compareCurrentSel.value = state.compareCurrent;
 
   render();
 });
@@ -848,6 +871,38 @@ MESES.forEach(m => {
   lbl.innerHTML = `<input type="checkbox" class="f-mes" value="${esc(m.key)}" ${state.months.has(m.key) ? "checked" : ""}> ${esc(m.label)}`;
   monthsEl.appendChild(lbl);
 });
+const compareBaseSel = document.getElementById("f-compare-base");
+const compareCurrentSel = document.getElementById("f-compare-current");
+MESES.forEach(m => {
+  const baseOpt = document.createElement("option");
+  baseOpt.value = m.key; baseOpt.textContent = m.label;
+  compareBaseSel.appendChild(baseOpt);
+  const currentOpt = document.createElement("option");
+  currentOpt.value = m.key; currentOpt.textContent = m.label;
+  compareCurrentSel.appendChild(currentOpt);
+});
+compareBaseSel.value = state.compareBase;
+compareCurrentSel.value = state.compareCurrent;
+function syncClientComparison(changed = "") {
+  const keys = MESES.map(m => m.key).slice().sort();
+  if (keys.length < 2) return;
+  let base = compareBaseSel.value || keys[keys.length - 2];
+  let current = compareCurrentSel.value || keys[keys.length - 1];
+  if (base === current) {
+    const idx = keys.indexOf(base);
+    if (changed === "base" && idx < keys.length - 1) current = keys[idx + 1];
+    else if (idx > 0) base = keys[idx - 1];
+    else current = keys[1];
+  }
+  if (base > current) [base, current] = [current, base];
+  state.compareBase = base;
+  state.compareCurrent = current;
+  compareBaseSel.value = base;
+  compareCurrentSel.value = current;
+  render();
+}
+compareBaseSel.addEventListener("change", () => syncClientComparison("base"));
+compareCurrentSel.addEventListener("change", () => syncClientComparison("current"));
 
 /* ---------------- filtros restantes ---------------- */
 const vSel = document.getElementById("f-vendedor");
@@ -1297,8 +1352,9 @@ document.getElementById("export-risk-btn").addEventListener("click", () => {
   const { rows, productNames, filtrosParts, mesesInfo, mesLabelByKey } = LAST_RISK_EXPORT;
   const mesAnterior = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
   const mesActual = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
+  const mesActualSuffix = MESES.length && mesesInfo.actual === MESES[MESES.length - 1].key ? " a la fecha" : "";
   const metaLines = [
-    `Clientes que compraron en ${mesAnterior} y todavía no compraron en ${mesActual} a la fecha`,
+    `Clientes que compraron en ${mesAnterior} y no compraron en ${mesActual}${mesActualSuffix}`,
     `Producto(s): ${productNames.join(", ")}`,
     `Filtros: ${filtrosParts.join(" | ") || "Sin filtros adicionales"}`,
     `${rows.length} clientes en riesgo | Pronto Express - generado 26/08/2026`,
@@ -1613,7 +1669,8 @@ function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
   count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
   const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
   const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
-  period.innerHTML = `<b>${esc(ant)}</b> vs <b>${esc(act)} a la fecha</b>. Respeta los filtros de producto/proveedor, vendedor, zona, día de ruta, subcanal y búsqueda de cliente. <b>Tocá un cliente para ver los productos que compraba.</b>`;
+  const actSuffix = MESES.length && mesesInfo.actual === MESES[MESES.length - 1].key ? " a la fecha" : "";
+  period.innerHTML = `<b>${esc(ant)}</b> vs <b>${esc(act)}${actSuffix}</b>. Respeta los filtros de producto/proveedor, vendedor, zona, día de ruta, subcanal y búsqueda de cliente. <b>Tocá un cliente para ver los productos que compraba.</b>`;
   tbody.innerHTML = rows.length ? rows.map(e => {
     const c = e.c;
     return `<tr class="client-row status-client-row" data-cid="${c.id}" data-month="${esc(mesesInfo.anterior)}" data-kind="risk" title="Ver los productos que compraba">
@@ -1653,7 +1710,8 @@ function renderClientesRecuperados(data, mesesInfo, isKg, mesLabelByKey) {
   count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
   const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
   const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
-  period.innerHTML = `Compraron antes de <b>${esc(ant)}</b>, no compraron durante ese mes y volvieron en <b>${esc(act)}</b>. Respeta los filtros actuales. <b>Tocá un cliente para ver los productos que volvió a comprar.</b>`;
+  const actSuffix = MESES.length && mesesInfo.actual === MESES[MESES.length - 1].key ? " a la fecha" : "";
+  period.innerHTML = `Compraron antes de <b>${esc(ant)}</b>, no compraron durante ese mes y volvieron en <b>${esc(act)}${actSuffix}</b>. Respeta los filtros actuales. <b>Tocá un cliente para ver los productos que volvió a comprar.</b>`;
   tbody.innerHTML = rows.length ? rows.map(e => {
     const c = e.c;
     return `<tr class="client-row status-client-row" data-cid="${c.id}" data-month="${esc(mesesInfo.actual)}" data-kind="recovered" title="Ver los productos que volvió a comprar">
@@ -1893,6 +1951,9 @@ function render() {
 
   // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
   const mesesInfo = computeMesActualAnterior();
+  const comparisonInfo = state.compareBase && state.compareCurrent
+    ? { anterior: state.compareBase, actual: state.compareCurrent }
+    : mesesInfo;
   let objEmpresa = null, objCurrent = null, comparativoCurrent = null;
   let riesgoNuevos = { riesgo: 0, recuperados: 0, clientesRiesgo: [], clientesRecuperados: [] };
   if (mesesInfo) {
@@ -1901,7 +1962,9 @@ function render() {
     objEmpresa = sumaMesesCliente(todosClientesVisibles, articleScope, mesesInfo.actual, mesesInfo.anterior);
     objCurrent = sumaMesesCliente(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
     comparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
-    riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
+  }
+  if (comparisonInfo) {
+    riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, comparisonInfo.actual, comparisonInfo.anterior, v);
   }
 
   // tiles
@@ -1922,19 +1985,21 @@ function render() {
   const comparativoSub = comparativoCurrent
     ? `vs ${esc(mesAnteriorLabel)} hasta el dia ${comparativoCurrent.diaCorte} &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
     : "se calcula cuando hay dos meses disponibles";
+  const compareBaseLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.anterior) || comparisonInfo.anterior) : "mes base";
+  const compareCurrentLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.actual) || comparisonInfo.actual) : "mes comparado";
   const tiles = [
     { label: v ? `${labelMagnitud()} ERP del vendedor` : `${labelMagnitud()} del periodo`, value: fmtValor(total), sub: v ? "segun vendedor del comprobante" : productLabel },
     { label: "Ticket promedio", value: fmtValor(metricCompradores.length ? total / metricCompradores.length : 0), sub: "por cliente que compra" },
-    { label: "Clientes en riesgo", value: riesgoNuevos.riesgo.toLocaleString("es-AR"), sub: "compraban el mes anterior, este mes (a la fecha) todavia no", cls: "tile-risk", action: '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' },
+    { label: "Clientes en riesgo", value: riesgoNuevos.riesgo.toLocaleString("es-AR"), sub: `compraron en ${esc(compareBaseLabel)} y no en ${esc(compareCurrentLabel)}`, cls: "tile-risk", action: '<button class="tile-action" id="show-risk-btn" type="button">Ver listado de clientes</button>' },
     { label: "Cobertura sobre clientes en ruta", value: pct(coberturaRuta), sub: `${compradoresConRuta.length} compran de ${conRuta.length} en ruta L-V` },
     { label: "Concentracion top 10 clientes", value: pct(top10Pct), sub: "del total filtrado" },
     { label: v ? `${labelMagnitud()} de la cartera actual` : "Clientes en la seleccion actual", value: v ? fmtValor(totalCartera) : totalClientes.toLocaleString("es-AR"), sub: v ? "segun ruta vigente del cliente" : `${compradores.length} compran` },
     { label: `Variacion de ${labelMagnitud().toLowerCase()}`, value: variacionValor, sub: comparativoSub, cls: `tile-trend ${variacionComparable !== null && variacionComparable < 0 ? "negative" : "positive"}` },
-    { label: "Clientes recuperados", value: riesgoNuevos.recuperados.toLocaleString("es-AR"), sub: "compraban antes, no compraron el mes anterior y volvieron este mes", cls: "tile-recovered", action: '<button class="tile-action" id="show-recovered-btn" type="button">Ver listado de clientes</button>' },
+    { label: "Clientes recuperados", value: riesgoNuevos.recuperados.toLocaleString("es-AR"), sub: `compraban antes, no compraron en ${esc(compareBaseLabel)} y volvieron en ${esc(compareCurrentLabel)}`, cls: "tile-recovered", action: '<button class="tile-action" id="show-recovered-btn" type="button">Ver listado de clientes</button>' },
   ];
   document.getElementById("tiles").innerHTML = tiles.map(item => `<div class="tile ${item.cls || ""}"><div class="label">${item.label}</div><div class="value">${item.value}</div><div class="sub">${item.sub}</div>${item.action || ""}</div>`).join("");
-  const riskRows = renderClientesRiesgo(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
-  const recoveredRows = renderClientesRecuperados(riesgoNuevos, mesesInfo, isKg, mesLabelByKey);
+  const riskRows = renderClientesRiesgo(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
+  const recoveredRows = renderClientesRecuperados(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
 
   // objetivo del mes
   if (mesesInfo) {
@@ -1967,7 +2032,7 @@ function render() {
     }
   }
   if (riesgoNuevos.riesgo > 0) {
-    findings.push(`<li><b>Atenci&oacute;n:</b> <b>${riesgoNuevos.riesgo}</b> cliente(s) que compraban el mes anterior todavia no compraron este mes (con los filtros actuales).</li>`);
+    findings.push(`<li><b>Atenci&oacute;n:</b> <b>${riesgoNuevos.riesgo}</b> cliente(s) que compraron en <b>${esc(compareBaseLabel)}</b> no compraron en <b>${esc(compareCurrentLabel)}</b> (con los filtros actuales).</li>`);
   }
   // subcanal top
   const scMap = new Map();
@@ -2100,8 +2165,8 @@ function render() {
   renderTop3Objetivo(v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet, mesesInfo, v);
 
   LAST_EXPORT = { rows: sortedRows, productNames, periodoTxt, filtrosParts, isKg };
-  LAST_RISK_EXPORT = { rows: riskRows, productNames, filtrosParts, mesesInfo, mesLabelByKey };
-  LAST_RECOVERED_EXPORT = { rows: recoveredRows, productNames, filtrosParts, mesesInfo, mesLabelByKey };
+  LAST_RISK_EXPORT = { rows: riskRows, productNames, filtrosParts, mesesInfo: comparisonInfo, mesLabelByKey };
+  LAST_RECOVERED_EXPORT = { rows: recoveredRows, productNames, filtrosParts, mesesInfo: comparisonInfo, mesLabelByKey };
 }
 
 document.getElementById("tiles").addEventListener("click", (event) => {
