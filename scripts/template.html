@@ -261,6 +261,7 @@
     display: grid; grid-template-columns: 1fr 130px 110px; gap: 10px; align-items: center;
     padding: 4px 0; font-size: 12.5px;
   }
+  .cp-head-status, .cp-item-status { grid-template-columns: minmax(220px, 1fr) 130px 110px 110px; }
   .cp-head { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--gridline); padding-bottom: 6px; margin-bottom: 4px; }
   .cp-item { border-bottom: 1px solid var(--gridline); }
   .cp-item:last-child { border-bottom: none; }
@@ -1035,6 +1036,43 @@ function renderClientProductsRow(cid) {
     ${rowsHtml}
   </div></td></tr>`;
 }
+function clientProductBreakdownForMonth(cid, month) {
+  const scope = activeArticleScope();
+  const arr = CLIENT_VENTAS_INDEX.get(cid) || [];
+  const byArt = new Map();
+  arr.forEach(row => {
+    const [, ida, fecha, imp, kg] = row;
+    if (fecha.slice(0, 7) !== month) return;
+    if (!ventaEsDelVendedor(row, vSel.value)) return;
+    if (scope && !scope.has(ida)) return;
+    let e = byArt.get(ida);
+    if (!e) { e = { importe: 0, kg: 0, ultima: "" }; byArt.set(ida, e); }
+    e.importe += imp;
+    e.kg += kg;
+    if (fecha > e.ultima) e.ultima = fecha;
+  });
+  const isKg = state.metric === "kg";
+  const rows = Array.from(byArt.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    return { nombre: art ? art.n : "Otros / ajustes (sin articulo)", ...e };
+  }).filter(r => r.importe !== 0 || r.kg !== 0);
+  rows.sort((a, b) => (isKg ? b.kg - a.kg : b.importe - a.importe) || a.nombre.localeCompare(b.nombre));
+  return rows;
+}
+function renderStatusClientProductsRow(cid, month, kind) {
+  const items = clientProductBreakdownForMonth(cid, month);
+  const key = `${kind}-${cid}`;
+  const monthLabel = (MESES.find(m => m.key === month) || {}).label || month;
+  if (!items.length) {
+    return `<tr class="client-products-row" data-for="${esc(key)}"><td colspan="9"><div class="cp-box"><div class="cp-empty">No hay productos con movimiento en ${esc(monthLabel)} para los filtros actuales.</div></div></td></tr>`;
+  }
+  const rowsHtml = items.map(r => `<div class="cp-item cp-item-status"><span class="cp-name">${esc(r.nombre)}</span><span class="cp-val">${money(r.importe)}</span><span class="cp-val">${kilos(r.kg)}</span><span class="cp-date">${esc(r.ultima || "")}</span></div>`).join("");
+  return `<tr class="client-products-row" data-for="${esc(key)}"><td colspan="9"><div class="cp-box">
+    <div class="cp-hist-title">Productos comprados en ${esc(monthLabel)}:</div>
+    <div class="cp-head cp-head-status"><span>Producto</span><span>Facturacion</span><span>Kilos</span><span>Ultima compra</span></div>
+    ${rowsHtml}
+  </div></td></tr>`;
+}
 document.getElementById("table-body").addEventListener("click", (e) => {
   const tr = e.target.closest("tr.client-row");
   if (!tr) return;
@@ -1048,6 +1086,26 @@ document.getElementById("table-body").addEventListener("click", (e) => {
   tr.insertAdjacentHTML("afterend", renderClientProductsRow(cid));
   tr.classList.add("expanded");
 });
+function enableStatusClientExpansion(tbodyId) {
+  document.getElementById(tbodyId).addEventListener("click", (e) => {
+    const tr = e.target.closest("tr.status-client-row");
+    if (!tr) return;
+    const cid = Number(tr.dataset.cid);
+    const month = tr.dataset.month;
+    const kind = tr.dataset.kind;
+    const key = `${kind}-${cid}`;
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains("client-products-row") && next.dataset.for === key) {
+      next.remove();
+      tr.classList.remove("expanded");
+      return;
+    }
+    tr.insertAdjacentHTML("afterend", renderStatusClientProductsRow(cid, month, kind));
+    tr.classList.add("expanded");
+  });
+}
+enableStatusClientExpansion("risk-table-body");
+enableStatusClientExpansion("recovered-table-body");
 
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-table-only", "print-no-detail");
@@ -1544,10 +1602,10 @@ function renderClientesRiesgo(data, mesesInfo, isKg, mesLabelByKey) {
   count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
   const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
   const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
-  period.innerHTML = `<b>${esc(ant)}</b> vs <b>${esc(act)} a la fecha</b>. Respeta los filtros de producto/proveedor, vendedor, zona, día de ruta, subcanal y búsqueda de cliente.`;
+  period.innerHTML = `<b>${esc(ant)}</b> vs <b>${esc(act)} a la fecha</b>. Respeta los filtros de producto/proveedor, vendedor, zona, día de ruta, subcanal y búsqueda de cliente. <b>Tocá un cliente para ver los productos que compraba.</b>`;
   tbody.innerHTML = rows.length ? rows.map(e => {
     const c = e.c;
-    return `<tr>
+    return `<tr class="client-row status-client-row" data-cid="${c.id}" data-month="${esc(mesesInfo.anterior)}" data-kind="risk" title="Ver los productos que compraba">
       <td>${c.id}</td><td class="name-cell">${esc(c.n)}</td>
       <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td><td>${esc(c.d)}</td><td>${esc(c.sc)}</td>
       <td>${esc(e.ultimaAnterior || "-")}</td><td class="name-cell">${esc(e.topProducto)}</td>
@@ -1584,10 +1642,10 @@ function renderClientesRecuperados(data, mesesInfo, isKg, mesLabelByKey) {
   count.textContent = `${rows.length.toLocaleString("es-AR")} clientes`;
   const ant = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
   const act = mesLabelByKey.get(mesesInfo.actual) || mesesInfo.actual;
-  period.innerHTML = `Compraron antes de <b>${esc(ant)}</b>, no compraron durante ese mes y volvieron en <b>${esc(act)}</b>. Respeta los filtros actuales.`;
+  period.innerHTML = `Compraron antes de <b>${esc(ant)}</b>, no compraron durante ese mes y volvieron en <b>${esc(act)}</b>. Respeta los filtros actuales. <b>Tocá un cliente para ver los productos que volvió a comprar.</b>`;
   tbody.innerHTML = rows.length ? rows.map(e => {
     const c = e.c;
-    return `<tr>
+    return `<tr class="client-row status-client-row" data-cid="${c.id}" data-month="${esc(mesesInfo.actual)}" data-kind="recovered" title="Ver los productos que volvió a comprar">
       <td>${c.id}</td><td class="name-cell">${esc(c.n)}</td>
       <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td><td>${esc(c.d)}</td><td>${esc(c.sc)}</td>
       <td>${esc(e.ultimaHistorica || "-")}</td><td class="name-cell">${esc(e.topProducto)}</td>
