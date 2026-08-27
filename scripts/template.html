@@ -17,6 +17,8 @@
     --border:         rgba(11,11,11,0.10);
     --series-1:       #2a78d6;
     --series-1-wash:  #cde2fb;
+    --series-2:       #0ca30c;
+    --series-3:       #e28a18;
     --status-good:    #0ca30c;
     --status-good-bg: #e6f5e6;
     --status-crit:    #d03b3b;
@@ -36,6 +38,8 @@
       --border:         rgba(255,255,255,0.10);
       --series-1:       #3987e5;
       --series-1-wash:  #184f95;
+      --series-2:       #28b928;
+      --series-3:       #f0a33b;
       --status-good:    #0ca30c;
       --status-good-bg: #123312;
       --status-crit:    #e66767;
@@ -55,6 +59,8 @@
     --border:         rgba(255,255,255,0.10);
     --series-1:       #3987e5;
     --series-1-wash:  #184f95;
+    --series-2:       #28b928;
+    --series-3:       #f0a33b;
     --status-good:    #0ca30c;
     --status-good-bg: #123312;
     --status-crit:    #e66767;
@@ -233,6 +239,30 @@
   .chart-svg.bars .bar-label { fill: var(--text-primary); font-size: 12px; }
   .chart-svg.bars .bar-value { fill: var(--text-secondary); font-size: 11.5px; }
   .empty-chart { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
+
+  .daily-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .daily-chart-wrap { overflow-x: auto; }
+  .daily-chart { min-width: 760px; }
+  .daily-chart .daily-money { fill: none; stroke: var(--series-1); stroke-width: 2.6; }
+  .daily-chart .daily-kg { fill: none; stroke: var(--series-2); stroke-width: 2.6; }
+  .daily-chart .daily-tickets { fill: none; stroke: var(--series-3); stroke-width: 2.6; }
+  .daily-chart .daily-dot-money { fill: var(--series-1); }
+  .daily-chart .daily-dot-kg { fill: var(--series-2); }
+  .daily-chart .daily-dot-tickets { fill: var(--series-3); }
+  .daily-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 12px; font-size: 12.5px; color: var(--text-secondary); }
+  .daily-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .daily-legend i { width: 18px; height: 3px; border-radius: 3px; display: inline-block; }
+  .daily-alerts { display: grid; gap: 10px; }
+  .daily-alert { border: 1px solid var(--border); border-left: 4px solid var(--series-3); border-radius: 9px; padding: 12px 14px; background: var(--page); }
+  .daily-alert strong { color: var(--text-primary); }
+  .daily-alert-products { margin-top: 5px; color: var(--text-secondary); font-size: 12.5px; }
+  .daily-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .daily-toolbar label { font-size: 12px; color: var(--text-secondary); }
+  .daily-toolbar select { display: block; min-width: 210px; margin-top: 4px; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text-primary); }
+  #daily-table-body tr { cursor: pointer; }
+  #daily-table-body tr.selected td { background: var(--series-1-wash); }
+  @media (max-width: 900px) { .daily-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .daily-tiles { grid-template-columns: 1fr; } }
 
   .summary-row { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; font-size: 13.5px; }
   .summary-row .chip { background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; }
@@ -476,6 +506,7 @@
   <div class="tabs">
     <button class="tab-btn active" id="tab-general" type="button">Vista general</button>
     <button class="tab-btn" id="tab-analysis" type="button">An&aacute;lisis avanzado</button>
+    <button class="tab-btn" id="tab-daily" type="button">An&aacute;lisis diario</button>
     <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
   </div>
 
@@ -600,6 +631,53 @@
 
   </div>
 
+  <div id="daily-results" style="display:none">
+    <div class="card">
+      <h2>Comparativa diaria &mdash; facturaci&oacute;n, kilos y boletas</h2>
+      <p class="lede" id="daily-period" style="margin-bottom:14px"></p>
+      <div class="tiles daily-tiles" id="daily-tiles"></div>
+      <div class="daily-legend">
+        <span><i style="background:var(--series-1)"></i>Facturaci&oacute;n</span>
+        <span><i style="background:var(--series-2)"></i>Kilos</span>
+        <span><i style="background:var(--series-3)"></i>Boletas</span>
+      </div>
+      <p class="lede" style="margin-bottom:10px">Las tres curvas se normalizan contra su propio m&aacute;ximo para comparar el movimiento diario; los valores exactos est&aacute;n en la tabla.</p>
+      <div class="daily-chart-wrap"><div id="daily-chart"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>D&iacute;as con menos kilos y m&aacute;s facturaci&oacute;n</h2>
+      <p class="lede" style="margin-bottom:12px">Compara cada d&iacute;a con el d&iacute;a anterior que tuvo ventas y muestra los productos de mayor valor que explican el cambio de mix.</p>
+      <div class="daily-alerts" id="daily-alerts"></div>
+    </div>
+
+    <div class="card">
+      <h2>Detalle por d&iacute;a</h2>
+      <div class="table-scroll" style="max-height:620px">
+        <table class="data-table">
+          <thead><tr><th>Fecha</th><th>Facturaci&oacute;n</th><th>Kilos</th><th>$/kg</th><th>Boletas</th><th>$/boleta</th><th>Kg/boleta</th></tr></thead>
+          <tbody id="daily-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="daily-toolbar">
+        <div>
+          <h2 style="margin-bottom:4px">Qu&eacute; se vendi&oacute; m&aacute;s caro</h2>
+          <p class="lede" style="margin:0">Productos del d&iacute;a ordenados por facturaci&oacute;n; $/kg permite detectar el mix de mayor valor.</p>
+        </div>
+        <label>D&iacute;a analizado<select id="daily-date-select"></select></label>
+      </div>
+      <div class="table-scroll" style="max-height:650px">
+        <table class="data-table">
+          <thead><tr><th>Producto</th><th>Proveedor</th><th>Facturaci&oacute;n</th><th>Kilos</th><th>$/kg</th><th>Clientes</th><th>Boletas</th></tr></thead>
+          <tbody id="daily-product-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div id="top3-results" style="display:none">
     <div class="card">
       <h2>Objetivo del mes por proveedor &mdash; +10% vs mes anterior</h2>
@@ -618,7 +696,7 @@
   </div>
 
   <div class="foot-note">
-    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Las rutas especiales se clasifican por <code>desRuta</code> y <code>desModoAtencion</code> de Chess (Telefonica, Mostrador / Personales, Online / Mostrador, Online o Mostrador) y ya no se mezclan con "Sin ruta". Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
+    <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. En Analisis diario, "boletas" cuenta facturas unicas por empresa, tipo, letra, serie y numero de documento; una factura con varios articulos se cuenta una sola vez y las notas de credito no suman boletas. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Las rutas especiales se clasifican por <code>desRuta</code> y <code>desModoAtencion</code> de Chess (Telefonica, Mostrador / Personales, Online / Mostrador, Online o Mostrador) y ya no se mezclan con "Sin ruta". Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> __TOTAL_CLIENTES__ clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). __TOTAL_ARTICULOS__ articulos activos en el catalogo, agrupados en __TOTAL_LINEAS__ lineas de producto.</p>
     <p>Datos extraidos en vivo de la API de Chess ERP el __FECHA_GENERADO__ (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
@@ -684,6 +762,7 @@ const state = {
   subcanales: new Set(),
   marcas: new Set(),
   metric: "money",
+  dailySelectedDate: null,
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
 function labelMagnitud() { return state.metric === "kg" ? "Kilos vendidos" : "Facturacion"; }
@@ -1026,21 +1105,34 @@ document.getElementById("clear-fecha").addEventListener("click", () => {
 [vSel, dSel, zSel, compraSel].forEach(el => el.addEventListener("change", render));
 buscarInput.addEventListener("input", render);
 
-/* ---------------- pestanas (vista general / analisis avanzado / top 3) ---------------- */
+/* ---------------- pestanas ---------------- */
 const TOP3_PROVEEDORES = ["LA PAULINA", "SODECAR", "ORALI"];
 let activeTab = "general";
 document.getElementById("tab-general").addEventListener("click", () => switchTab("general"));
 document.getElementById("tab-analysis").addEventListener("click", () => switchTab("analysis"));
+document.getElementById("tab-daily").addEventListener("click", () => switchTab("daily"));
 document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById("tab-general").classList.toggle("active", tab === "general");
   document.getElementById("tab-analysis").classList.toggle("active", tab === "analysis");
+  document.getElementById("tab-daily").classList.toggle("active", tab === "daily");
   document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
   document.getElementById("results").style.display = tab === "general" ? "block" : "none";
   document.getElementById("analysis-results").style.display = tab === "analysis" ? "block" : "none";
+  document.getElementById("daily-results").style.display = tab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
 }
+document.getElementById("daily-date-select").addEventListener("change", event => {
+  state.dailySelectedDate = event.target.value || null;
+  render();
+});
+document.getElementById("daily-table-body").addEventListener("click", event => {
+  const row = event.target.closest("tr[data-date]");
+  if (!row) return;
+  state.dailySelectedDate = row.dataset.date;
+  render();
+});
 
 /* ---------------- detalle de productos por cliente (desplegable en la tabla) ---------------- */
 function clientProductBreakdown(cid) {
@@ -1573,6 +1665,150 @@ function barsSVG(rows, opts) {
   return out;
 }
 
+/* ---------------- analisis diario: dinero, kilos, boletas y mix ---------------- */
+function fechaCorta(fecha) {
+  if (!fecha || fecha.length < 10) return fecha || "-";
+  return `${fecha.slice(8, 10)}/${fecha.slice(5, 7)}/${fecha.slice(0, 4)}`;
+}
+function precioKg(importe, kg) {
+  return kg > 0 ? `${money(importe / kg)}/kg` : "-";
+}
+function dailyComparisonSVG(days) {
+  if (!days.length) return '<div class="empty-chart">Sin ventas para graficar con los filtros actuales.</div>';
+  const w = 1000, h = 320, left = 54, right = 22, top = 24, bottom = 54;
+  const plotW = w - left - right, plotH = h - top - bottom;
+  const maxImp = Math.max(...days.map(d => Math.max(0, d.imp)), 1);
+  const maxKg = Math.max(...days.map(d => Math.max(0, d.kg)), 1);
+  const maxDocs = Math.max(...days.map(d => d.docs.size), 1);
+  const x = i => days.length === 1 ? left + plotW / 2 : left + i / (days.length - 1) * plotW;
+  const y = (value, max) => top + plotH - Math.max(0, value) / max * plotH;
+  const points = (field, max) => days.map((d, i) => `${x(i).toFixed(1)},${y(field(d), max).toFixed(1)}`).join(" ");
+  let out = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg daily-chart" role="img" aria-label="Comparativa diaria normalizada de facturacion, kilos y boletas">`;
+  [0, 25, 50, 75, 100].forEach(p => {
+    const gy = top + plotH - p / 100 * plotH;
+    out += `<line x1="${left}" y1="${gy}" x2="${w-right}" y2="${gy}" class="gridline"/><text x="${left-8}" y="${gy+4}" text-anchor="end" class="axis-label">${p}%</text>`;
+  });
+  out += `<polyline points="${points(d => d.imp, maxImp)}" class="daily-money"/>`;
+  out += `<polyline points="${points(d => d.kg, maxKg)}" class="daily-kg"/>`;
+  out += `<polyline points="${points(d => d.docs.size, maxDocs)}" class="daily-tickets"/>`;
+  const labelStep = Math.max(1, Math.ceil(days.length / 12));
+  days.forEach((d, i) => {
+    const cx = x(i);
+    out += `<circle cx="${cx}" cy="${y(d.imp, maxImp)}" r="3.2" class="daily-dot-money"><title>${fechaCorta(d.fecha)} · ${money(d.imp)}</title></circle>`;
+    out += `<circle cx="${cx}" cy="${y(d.kg, maxKg)}" r="3.2" class="daily-dot-kg"><title>${fechaCorta(d.fecha)} · ${kilos(d.kg)}</title></circle>`;
+    out += `<circle cx="${cx}" cy="${y(d.docs.size, maxDocs)}" r="3.2" class="daily-dot-tickets"><title>${fechaCorta(d.fecha)} · ${d.docs.size} boletas</title></circle>`;
+    if (i % labelStep === 0 || i === days.length - 1) out += `<text x="${cx}" y="${h-22}" text-anchor="middle" class="axis-label">${d.fecha.slice(8,10)}/${d.fecha.slice(5,7)}</text>`;
+  });
+  out += `<text x="${left}" y="14" class="axis-title">Índice diario (100% = máximo de cada serie en el período)</text></svg>`;
+  return out;
+}
+function productosCarosDelDia(day, limit = 3) {
+  if (!day) return [];
+  const promedioDia = day.kg > 0 ? day.imp / day.kg : 0;
+  const productos = Array.from(day.porArticulo.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    return {
+      id: ida,
+      nombre: art ? art.n : `Articulo ${ida}`,
+      proveedor: art ? proveedorDe(art.m) : "Sin proveedor",
+      importe: e.imp,
+      kg: e.kg,
+      ppk: e.kg > 0 ? e.imp / e.kg : 0,
+      clientes: e.clientes,
+      docs: e.docs,
+    };
+  }).filter(p => p.importe > 0 || p.kg > 0);
+  const sobrePromedio = productos.filter(p => p.ppk > promedioDia && p.importe > 0);
+  return (sobrePromedio.length ? sobrePromedio : productos)
+    .sort((a, b) => b.importe - a.importe || b.ppk - a.ppk)
+    .slice(0, limit);
+}
+function renderDailyProducts(day) {
+  const tbody = document.getElementById("daily-product-body");
+  if (!day) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">Sin datos para el día seleccionado.</td></tr>';
+    return;
+  }
+  const rows = Array.from(day.porArticulo.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    return {
+      nombre: art ? art.n : `Articulo ${ida}`,
+      proveedor: art ? proveedorDe(art.m) : "Sin proveedor",
+      importe: e.imp, kg: e.kg, clientes: e.clientes.size, boletas: e.docs.size,
+    };
+  }).filter(p => p.importe !== 0 || p.kg !== 0).sort((a, b) => b.importe - a.importe);
+  tbody.innerHTML = rows.length ? rows.map(p => `<tr>
+    <td class="name-cell">${esc(p.nombre)}</td><td>${esc(p.proveedor)}</td><td>${money(p.importe)}</td>
+    <td>${kilos(p.kg)}</td><td>${precioKg(p.importe, p.kg)}</td><td>${p.clientes}</td><td>${p.boletas}</td>
+  </tr>`).join("") : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">Sin productos con importe o kilos distintos de cero.</td></tr>';
+}
+function renderDailyAnalysis({ vendedor, articleScope, clientIdSet, hayFiltroSegmentoCliente, compra }) {
+  const byDay = new Map();
+  if (compra !== "no") for (const row of VENTAS) {
+    const [cid, ida, fecha, imp, kg] = row;
+    if (!ventaEsDelVendedor(row, vendedor)) continue;
+    if ((!vendedor || hayFiltroSegmentoCliente) && !clientIdSet.has(cid)) continue;
+    if (articleScope && !articleScope.has(ida)) continue;
+    if (!fechaEnPeriodo(fecha)) continue;
+    let day = byDay.get(fecha);
+    if (!day) { day = { fecha, imp: 0, kg: 0, docs: new Set(), porArticulo: new Map() }; byDay.set(fecha, day); }
+    day.imp += imp; day.kg += kg;
+    const docKey = row[6] || "", docType = String(row[7] || "").toUpperCase();
+    const esFactura = docType.includes("FACTURA");
+    if (docKey && esFactura) day.docs.add(docKey);
+    let art = day.porArticulo.get(ida);
+    if (!art) { art = { imp: 0, kg: 0, clientes: new Set(), docs: new Set() }; day.porArticulo.set(ida, art); }
+    art.imp += imp; art.kg += kg; art.clientes.add(cid);
+    if (docKey && esFactura) art.docs.add(docKey);
+  }
+  const days = Array.from(byDay.values()).filter(d => d.imp !== 0 || d.kg !== 0 || d.docs.size).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const period = document.getElementById("daily-period");
+  const tiles = document.getElementById("daily-tiles");
+  const chart = document.getElementById("daily-chart");
+  const alerts = document.getElementById("daily-alerts");
+  const dailyBody = document.getElementById("daily-table-body");
+  const dateSelect = document.getElementById("daily-date-select");
+  if (!days.length) {
+    period.textContent = "No hay ventas con los filtros y fechas seleccionados.";
+    tiles.innerHTML = ""; chart.innerHTML = '<div class="empty-chart">Sin datos para graficar.</div>';
+    alerts.innerHTML = '<div class="empty-chart">No hay días comparables.</div>';
+    dailyBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">Sin datos diarios.</td></tr>';
+    dateSelect.innerHTML = ""; renderDailyProducts(null); return;
+  }
+  period.innerHTML = `<b>${fechaCorta(days[0].fecha)}</b> a <b>${fechaCorta(days[days.length-1].fecha)}</b>. Respeta los filtros de vendedor, proveedor/producto, fechas, zona, ruta, subcanal y cliente. Boletas = facturas únicas de Chess.`;
+  const maxBy = key => days.reduce((best, d) => key(d) > key(best) ? d : best, days[0]);
+  const bestImp = maxBy(d => d.imp), bestKg = maxBy(d => d.kg), bestPpk = maxBy(d => d.kg > 0 ? d.imp / d.kg : 0), bestDocs = maxBy(d => d.docs.size);
+  const kpis = [
+    {label:"Mayor facturación",value:money(bestImp.imp),sub:fechaCorta(bestImp.fecha)},
+    {label:"Mayor volumen",value:kilos(bestKg.kg),sub:fechaCorta(bestKg.fecha)},
+    {label:"Mix de mayor valor",value:precioKg(bestPpk.imp,bestPpk.kg),sub:fechaCorta(bestPpk.fecha)},
+    {label:"Más boletas",value:bestDocs.docs.size.toLocaleString("es-AR"),sub:`${fechaCorta(bestDocs.fecha)} · ${bestDocs.docs.size ? money(bestDocs.imp / bestDocs.docs.size) + " por boleta" : "sin facturas"}`},
+  ];
+  tiles.innerHTML = kpis.map(k => `<div class="tile"><div class="label">${k.label}</div><div class="value">${k.value}</div><div class="sub">${k.sub}</div></div>`).join("");
+  chart.innerHTML = dailyComparisonSVG(days);
+
+  const anomalies = [];
+  for (let i = 1; i < days.length; i++) {
+    const prev = days[i-1], cur = days[i];
+    if (cur.imp > prev.imp && cur.kg < prev.kg) anomalies.push({prev, cur});
+  }
+  alerts.innerHTML = anomalies.length ? anomalies.slice().reverse().map(({prev, cur}) => {
+    const impPct = prev.imp ? (cur.imp - prev.imp) / Math.abs(prev.imp) * 100 : 0;
+    const kgPct = prev.kg ? (cur.kg - prev.kg) / Math.abs(prev.kg) * 100 : 0;
+    const top = productosCarosDelDia(cur, 3);
+    const topTxt = top.length ? top.map(p => `${esc(p.nombre)} (${precioKg(p.importe,p.kg)}, ${money(p.importe)})`).join(" · ") : "Sin productos positivos para explicar el mix.";
+    return `<div class="daily-alert"><strong>${fechaCorta(cur.fecha)} vs ${fechaCorta(prev.fecha)}:</strong> facturación <b>+${pct(impPct)}</b> y kilos <b>${pct(kgPct)}</b>. Precio promedio: <b>${precioKg(cur.imp,cur.kg)}</b> vs ${precioKg(prev.imp,prev.kg)}.<div class="daily-alert-products"><b>Productos de mayor valor:</b> ${topTxt}</div></div>`;
+  }).join("") : '<div class="empty-chart">No hubo días en los que simultáneamente subiera la facturación y bajaran los kilos dentro del período filtrado.</div>';
+
+  if (!state.dailySelectedDate || !byDay.has(state.dailySelectedDate)) state.dailySelectedDate = days[days.length - 1].fecha;
+  dateSelect.innerHTML = days.slice().reverse().map(d => `<option value="${d.fecha}" ${d.fecha === state.dailySelectedDate ? "selected" : ""}>${fechaCorta(d.fecha)}</option>`).join("");
+  dailyBody.innerHTML = days.slice().reverse().map(d => {
+    const tickets = d.docs.size;
+    return `<tr data-date="${d.fecha}" class="${d.fecha === state.dailySelectedDate ? "selected" : ""}"><td>${fechaCorta(d.fecha)}</td><td>${money(d.imp)}</td><td>${kilos(d.kg)}</td><td>${precioKg(d.imp,d.kg)}</td><td>${tickets}</td><td>${tickets ? money(d.imp/tickets) : "-"}</td><td>${tickets ? kilos(d.kg/tickets) : "-"}</td></tr>`;
+  }).join("");
+  renderDailyProducts(byDay.get(state.dailySelectedDate));
+}
+
 /* ---------------- objetivo del mes (+10% vs mes anterior) ---------------- */
 function computeMesActualAnterior() {
   const arr = MESES.map(m => m.key).slice().sort();
@@ -1829,6 +2065,7 @@ function render() {
   document.getElementById("results-empty").style.display = "none";
   document.getElementById("results").style.display = activeTab === "general" ? "block" : "none";
   document.getElementById("analysis-results").style.display = activeTab === "analysis" ? "block" : "none";
+  document.getElementById("daily-results").style.display = activeTab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = activeTab === "top3" ? "block" : "none";
 
   const isKg = state.metric === "kg";
@@ -2169,6 +2406,7 @@ function render() {
     </tr>`;
   }).join("");
 
+  renderDailyAnalysis({ vendedor: v, articleScope, clientIdSet: salesClienteIdSet, hayFiltroSegmentoCliente, compra });
   renderTop3(provStats, filteredClientes.length, isKg);
   renderTop3Objetivo(v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet, mesesInfo, v);
 

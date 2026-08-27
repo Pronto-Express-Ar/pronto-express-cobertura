@@ -229,7 +229,7 @@ print("Articulos excluidos por proveedor:", articulos_excluidos)
 with open(f"{DATA_DIR}/articulos_multi.json", "w", encoding="utf-8") as f:
     json.dump(articulos_out, f, ensure_ascii=False)
 
-# ---------- Ventas agregadas por cliente x articulo x dia exacto ----------
+# ---------- Ventas agregadas por cliente x articulo x comprobante ----------
 # Granularidad diaria (no solo mensual) para poder filtrar por un dia puntual
 # en el panel; los meses para los checkboxes se derivan de estas fechas.
 ventas = json.load(open(f"{DATA_DIR}/ventas.json", encoding="utf-8"))
@@ -238,7 +238,7 @@ print("Lineas de venta totales cargadas:", len(ventas))
 # Se conserva el vendedor del comprobante. No alcanza con inferirlo desde la
 # ruta actual del cliente: un cliente puede cambiar de ruta o recibir una venta
 # de otro vendedor. Chess usa idVendedor para sus informes por vendedor.
-agg = {}  # (idc, ida, fecha "YYYY-MM-DD", id_vendedor) -> {imp, kg}
+agg = {}  # (idc, ida, fecha, id_vendedor, comprobante, tipo) -> {imp, kg}
 # Conservamos ventas de todos los clientes existentes en Chess. La cartera
 # visible sigue excluyendo los vendedores definidos arriba, pero una venta debe
 # permanecer disponible para cuadrar un informe por idVendedor del comprobante.
@@ -272,21 +272,34 @@ for v in ventas:
     kg = peso_total if peso_total else unimedtotal
     id_vendedor = int(v.get("idVendedor") or 0)
 
-    key = (idc, ida, fecha, id_vendedor)
+    # Identificador estable del comprobante. Es indispensable para contar
+    # boletas una sola vez aunque tengan varias lineas o articulos. Se incluye
+    # el tipo porque Chess puede reutilizar numeraciones entre facturas y NC.
+    tipo_documento = str(v.get("dsDocumento") or "").strip().upper()
+    tipo_codigo = "F" if "FACTURA" in tipo_documento else ("NC" if "CREDITO" in tipo_documento else tipo_documento)
+    comprobante = "|".join([
+        str(v.get("idEmpresa") or "").strip(), tipo_codigo,
+        str(v.get("letra") or "").strip(), str(v.get("serie") or "").strip(),
+        str(v.get("nrodoc") or "").strip(),
+    ])
+
+    key = (idc, ida, fecha, id_vendedor, comprobante, tipo_documento)
     e = agg.setdefault(key, {"imp": 0.0, "kg": 0.0})
     e["imp"] += importe
     e["kg"] += kg
 
 rows = []
-for (idc, ida, fecha, id_vendedor), e in agg.items():
+for (idc, ida, fecha, id_vendedor, comprobante, tipo_documento), e in agg.items():
     imp = round(e["imp"], 2)
     kg = round(e["kg"], 3)
     if imp == 0 and kg == 0:
         continue
-    # Esquema: cliente, articulo, fecha, importe, kilos, vendedor comprobante.
-    rows.append([idc, ida, fecha, imp, kg, id_vendedor])
+    # Esquema: cliente, articulo, fecha, importe, kilos, vendedor comprobante,
+    # id comprobante y tipo. Los primeros seis campos conservan el contrato
+    # anterior para no alterar los calculos existentes del panel.
+    rows.append([idc, ida, fecha, imp, kg, id_vendedor, comprobante, tipo_documento])
 
-print("Filas agregadas cliente x articulo x dia:", len(rows))
+print("Filas agregadas cliente x articulo x comprobante:", len(rows))
 with open(f"{DATA_DIR}/ventas_agg_multi.json", "w", encoding="utf-8") as f:
     json.dump(rows, f, ensure_ascii=False)
 
