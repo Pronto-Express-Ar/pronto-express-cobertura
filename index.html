@@ -652,7 +652,10 @@
     </div>
 
     <div class="card">
-      <h2>Detalle por d&iacute;a</h2>
+      <div class="daily-toolbar">
+        <h2 style="margin:0">Detalle por d&iacute;a</h2>
+        <button class="btn-link btn-print" id="export-daily-btn" type="button">&#128190; Exportar a Excel</button>
+      </div>
       <div class="table-scroll" style="max-height:620px">
         <table class="data-table">
           <thead><tr><th>Fecha</th><th>Facturaci&oacute;n</th><th>Kilos</th><th>$/kg</th><th>Boletas</th><th>$/boleta</th><th>Kg/boleta</th></tr></thead>
@@ -667,7 +670,10 @@
           <h2 style="margin-bottom:4px">Qu&eacute; se vendi&oacute; m&aacute;s caro</h2>
           <p class="lede" style="margin:0">Productos del d&iacute;a ordenados por facturaci&oacute;n; $/kg permite detectar el mix de mayor valor.</p>
         </div>
-        <label>D&iacute;a analizado<select id="daily-date-select"></select></label>
+        <div style="display:flex;align-items:end;gap:9px;flex-wrap:wrap">
+          <label>D&iacute;a analizado<select id="daily-date-select"></select></label>
+          <button class="btn-link btn-print" id="export-daily-products-btn" type="button">&#128190; Exportar a Excel</button>
+        </div>
       </div>
       <div class="table-scroll" style="max-height:650px">
         <table class="data-table">
@@ -785,6 +791,7 @@ function fechaEnPeriodo(fecha) {
 let LAST_EXPORT = null;
 let LAST_RISK_EXPORT = null;
 let LAST_RECOVERED_EXPORT = null;
+let LAST_DAILY_EXPORT = null;
 
 /* ---------------- panel de productos ---------------- */
 const groupsEl = document.getElementById("product-groups");
@@ -1410,6 +1417,86 @@ function buildXlsx(sheetXml) {
   ]);
 }
 
+function descargarXlsx(sheetXml, filename) {
+  const blob = buildXlsx(sheetXml);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("export-daily-btn").addEventListener("click", () => {
+  if (!LAST_DAILY_EXPORT) return;
+  const { days, productNames, periodoTxt, filtrosParts } = LAST_DAILY_EXPORT;
+  const metaLines = [
+    "Analisis diario: facturacion, kilos y boletas",
+    `Producto(s): ${productNames.join(", ")}`,
+    [periodoTxt, ...filtrosParts].join(" | "),
+    `${days.length} dias con movimiento | Pronto Express - generado 27/08/2026`,
+  ];
+  const headers = ["Fecha", "Facturacion", "Kilos", "Precio promedio por kg", "Boletas", "Facturacion por boleta", "Kilos por boleta"];
+  const dataRows = days.slice().reverse().map(d => {
+    const boletas = d.docs.size;
+    return [
+      { t: "s", v: d.fecha },
+      { t: "n", v: Math.round(d.imp * 100) / 100 },
+      { t: "n", v: Math.round(d.kg * 1000) / 1000 },
+      { t: "n", v: d.kg > 0 ? Math.round((d.imp / d.kg) * 100) / 100 : 0 },
+      { t: "n", v: boletas },
+      { t: "n", v: boletas ? Math.round((d.imp / boletas) * 100) / 100 : 0 },
+      { t: "n", v: boletas ? Math.round((d.kg / boletas) * 1000) / 1000 : 0 },
+    ];
+  });
+  descargarXlsx(
+    xlsxSheetXml(metaLines, headers, dataRows),
+    `detalle_diario_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
+});
+
+document.getElementById("export-daily-products-btn").addEventListener("click", () => {
+  if (!LAST_DAILY_EXPORT) return;
+  const { byDay, selectedDate, productNames, periodoTxt, filtrosParts } = LAST_DAILY_EXPORT;
+  const day = byDay.get(selectedDate);
+  if (!day) return;
+  const products = Array.from(day.porArticulo.entries()).map(([ida, e]) => {
+    const art = ART_BY_ID.get(ida);
+    return {
+      id: ida,
+      nombre: art ? art.n : `Articulo ${ida}`,
+      proveedor: art ? proveedorDe(art.m) : "Sin proveedor",
+      importe: e.imp,
+      kg: e.kg,
+      clientes: e.clientes.size,
+      boletas: e.docs.size,
+    };
+  }).filter(p => p.importe !== 0 || p.kg !== 0).sort((a, b) => b.importe - a.importe);
+  const metaLines = [
+    `Productos vendidos el ${fechaCorta(selectedDate)}`,
+    `Alcance: ${productNames.join(", ")}`,
+    [periodoTxt, ...filtrosParts].join(" | "),
+    `${products.length} productos | Pronto Express - generado 27/08/2026`,
+  ];
+  const headers = ["Codigo producto", "Producto", "Proveedor", "Facturacion", "Kilos", "Precio promedio por kg", "Clientes", "Boletas"];
+  const dataRows = products.map(p => [
+    { t: "n", v: p.id },
+    { t: "s", v: p.nombre },
+    { t: "s", v: p.proveedor },
+    { t: "n", v: Math.round(p.importe * 100) / 100 },
+    { t: "n", v: Math.round(p.kg * 1000) / 1000 },
+    { t: "n", v: p.kg > 0 ? Math.round((p.importe / p.kg) * 100) / 100 : 0 },
+    { t: "n", v: p.clientes },
+    { t: "n", v: p.boletas },
+  ]);
+  descargarXlsx(
+    xlsxSheetXml(metaLines, headers, dataRows),
+    `productos_dia_${selectedDate}.xlsx`
+  );
+});
+
 document.getElementById("export-btn").addEventListener("click", () => {
   if (!LAST_EXPORT) return;
   const { rows, productNames, periodoTxt, filtrosParts, isKg } = LAST_EXPORT;
@@ -1746,7 +1833,7 @@ function renderDailyProducts(day) {
     <td>${kilos(p.kg)}</td><td>${precioKg(p.importe, p.kg)}</td><td>${p.clientes}</td><td>${p.boletas}</td>
   </tr>`).join("") : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">Sin productos con importe o kilos distintos de cero.</td></tr>';
 }
-function renderDailyAnalysis({ vendedor, articleScope, clientIdSet, hayFiltroSegmentoCliente, compra }) {
+function renderDailyAnalysis({ vendedor, articleScope, clientIdSet, hayFiltroSegmentoCliente, compra, productNames, periodoTxt, filtrosParts }) {
   const byDay = new Map();
   if (compra !== "no") for (const row of VENTAS) {
     const [cid, ida, fecha, imp, kg] = row;
@@ -1773,6 +1860,7 @@ function renderDailyAnalysis({ vendedor, articleScope, clientIdSet, hayFiltroSeg
   const dailyBody = document.getElementById("daily-table-body");
   const dateSelect = document.getElementById("daily-date-select");
   if (!days.length) {
+    LAST_DAILY_EXPORT = null;
     period.textContent = "No hay ventas con los filtros y fechas seleccionados.";
     tiles.innerHTML = ""; chart.innerHTML = '<div class="empty-chart">Sin datos para graficar.</div>';
     alerts.innerHTML = '<div class="empty-chart">No hay días comparables.</div>';
@@ -1811,6 +1899,7 @@ function renderDailyAnalysis({ vendedor, articleScope, clientIdSet, hayFiltroSeg
     return `<tr data-date="${d.fecha}" class="${d.fecha === state.dailySelectedDate ? "selected" : ""}"><td>${fechaCorta(d.fecha)}</td><td>${money(d.imp)}</td><td>${kilos(d.kg)}</td><td>${precioKg(d.imp,d.kg)}</td><td>${tickets}</td><td>${tickets ? money(d.imp/tickets) : "-"}</td><td>${tickets ? kilos(d.kg/tickets) : "-"}</td></tr>`;
   }).join("");
   renderDailyProducts(byDay.get(state.dailySelectedDate));
+  LAST_DAILY_EXPORT = { days, byDay, selectedDate: state.dailySelectedDate, productNames, periodoTxt, filtrosParts };
 }
 
 /* ---------------- objetivo del mes (+10% vs mes anterior) ---------------- */
@@ -2410,7 +2499,7 @@ function render() {
     </tr>`;
   }).join("");
 
-  renderDailyAnalysis({ vendedor: v, articleScope, clientIdSet: salesClienteIdSet, hayFiltroSegmentoCliente, compra });
+  renderDailyAnalysis({ vendedor: v, articleScope, clientIdSet: salesClienteIdSet, hayFiltroSegmentoCliente, compra, productNames, periodoTxt, filtrosParts });
   renderTop3(provStats, filteredClientes.length, isKg);
   renderTop3Objetivo(v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet, mesesInfo, v);
 
