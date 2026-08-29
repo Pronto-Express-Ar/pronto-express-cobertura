@@ -404,7 +404,7 @@
     <h1>Panel de Cobertura de Producto &mdash; Pronto Express</h1>
     <div class="meta">
       Alcance: <b>771 clientes</b> &middot; <b>5 vendedores</b> (Lucas Serey, Maximiliano Luna, Gabriela Brandan, Analia Valenti, Superv. Vanesa Stabile) &middot;
-      Generado: <b>28/08/2026</b> &middot; Fuente: API Chess ERP (actualizacion automatica diaria)
+      Generado: <b>29/08/2026</b> &middot; Fuente: API Chess ERP (actualizacion automatica diaria)
     </div>
     </div>
   </header>
@@ -704,7 +704,7 @@
   <div class="foot-note">
     <p><b>Metodologia:</b> "Compra" = tuvo al menos una factura (anulado=NO) de alguno de los articulos seleccionados, en alguno de los meses tildados. El importe/kilos es neto de notas de credito de esos articulos en ese periodo. En Analisis diario, "boletas" cuenta facturas unicas por empresa, tipo, letra, serie y numero de documento; una factura con varios articulos se cuenta una sola vez y las notas de credito no suman boletas. Al elegir vendedor, facturacion, kilos y objetivos se asignan por <code>idVendedor</code> del comprobante, igual que Chess; la cobertura y el detalle de cartera usan la ruta vigente del cliente. Las rutas especiales se clasifican por <code>desRuta</code> y <code>desModoAtencion</code> de Chess (Telefonica, Mostrador / Personales, Online / Mostrador, Online o Mostrador) y ya no se mezclan con "Sin ruta". Los kilos se toman de <code>pesoTotal</code> (peso real de balanza) para articulos pesables, y de cantidad&times;peso-estandar del articulo (ya calculado por el ERP) para el resto &mdash; ambos ya vienen con el signo correcto para ventas/devoluciones. RICREM se consolida dentro de LA PAULINA y LA RESIDENCIA dentro de SODECAR. CAB ESPINILLOS, DULCOR, GRUPOLAR, MANICOL y PRONTO EXPRESS se excluyen del universo del informe. "Zona Paulina" es la union de los poligonos "Zona A" y "Zona B" de "Zonas Exclusivas LA PAULINA" (Google My Maps del usuario); un cliente sin coordenadas cargadas en el ERP, o fuera de esos poligonos, aparece como "Fuera de Zona Paulina".</p>
     <p><b>Alcance:</b> 771 clientes activos (se excluyeron del universo los vendedores Eduardo Ruiz Moreno, Maria Julia Bussi, Alejandra Gonzalez, Superv. Federico Yunes y Damian Fernandez, y sus clientes, a pedido explicito). 542 articulos activos en el catalogo, agrupados en 47 lineas de producto.</p>
-    <p>Datos extraidos en vivo de la API de Chess ERP el 28/08/2026 (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
+    <p>Datos extraidos en vivo de la API de Chess ERP el 29/08/2026 (se actualiza solo, todos los dias). Se filtraron automaticamente entradas invalidas devueltas por la API al final de la paginacion (stubs de error).</p>
   </div>
 
 </div>
@@ -1436,7 +1436,7 @@ document.getElementById("export-daily-btn").addEventListener("click", () => {
     "Analisis diario: facturacion, kilos y boletas",
     `Producto(s): ${productNames.join(", ")}`,
     [periodoTxt, ...filtrosParts].join(" | "),
-    `${days.length} dias con movimiento | Pronto Express - generado 28/08/2026`,
+    `${days.length} dias con movimiento | Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Fecha", "Facturacion", "Kilos", "Precio promedio por kg", "Boletas", "Facturacion por boleta", "Kilos por boleta"];
   const dataRows = days.slice().reverse().map(d => {
@@ -1478,7 +1478,7 @@ document.getElementById("export-daily-products-btn").addEventListener("click", (
     `Productos vendidos el ${fechaCorta(selectedDate)}`,
     `Alcance: ${productNames.join(", ")}`,
     [periodoTxt, ...filtrosParts].join(" | "),
-    `${products.length} productos | Pronto Express - generado 28/08/2026`,
+    `${products.length} productos | Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Codigo producto", "Producto", "Proveedor", "Facturacion", "Kilos", "Precio promedio por kg", "Clientes", "Boletas"];
   const dataRows = products.map(p => [
@@ -1504,7 +1504,7 @@ document.getElementById("export-btn").addEventListener("click", () => {
     `Producto(s): ${productNames.join(", ")}`,
     `Medido en: ${isKg ? "Kilos" : "Dinero"}`,
     [periodoTxt, ...filtrosParts].join(" | "),
-    `Pronto Express - generado 28/08/2026`,
+    `Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"];
   const dataRows = rows.map(r => {
@@ -1546,7 +1546,7 @@ document.getElementById("export-risk-btn").addEventListener("click", () => {
     `Clientes que compraron en ${mesAnterior} y no compraron en ${mesActual}${mesActualSuffix}`,
     `Producto(s): ${productNames.join(", ")}`,
     `Filtros: ${filtrosParts.join(" | ") || "Sin filtros adicionales"}`,
-    `${rows.length} clientes en riesgo | Pronto Express - generado 28/08/2026`,
+    `${rows.length} clientes en riesgo | Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Codigo", "Cliente", "Vendedor", "Dia ruta", "Subcanal MKT", "Ultima compra", "Producto principal anterior", "Facturacion anterior", "Kilos anteriores"];
   const dataRows = rows.map(e => {
@@ -1585,7 +1585,7 @@ document.getElementById("export-recovered-btn").addEventListener("click", () => 
     `Clientes recuperados en ${mesActual}: compraron antes de ${mesAnterior}, no compraron durante ${mesAnterior} y volvieron este mes`,
     `Producto(s): ${productNames.join(", ")}`,
     `Filtros: ${filtrosParts.join(" | ") || "Sin filtros adicionales"}`,
-    `${rows.length} clientes recuperados | Pronto Express - generado 28/08/2026`,
+    `${rows.length} clientes recuperados | Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Codigo", "Cliente", "Vendedor", "Dia ruta", "Subcanal MKT", "Ultima compra historica", "Producto principal actual", "Facturacion actual", "Kilos actuales"];
   const dataRows = rows.map(e => {
@@ -1661,7 +1661,7 @@ document.getElementById("export-client-products-btn").addEventListener("click", 
     `Alcance de productos: ${productNames.join(", ")}`,
     [periodoTxt, ...filtrosParts].join(" | "),
     `${rows.length} clientes del listado | ${detailRows.filter(x => x.product).length} combinaciones cliente-producto`,
-    `Pronto Express - generado 28/08/2026`,
+    `Pronto Express - generado 29/08/2026`,
   ];
   const headers = ["Codigo cliente", "Cliente", "Localidad", "Vendedor", "Dia ruta", "Subcanal MKT", "Estado", "Codigo producto", "Producto", "Linea", "Proveedor", "Importe neto", "Kilos netos", "Ultima compra"];
   const dataRows = detailRows.map(({ c, estado, product }) => [
@@ -2469,7 +2469,7 @@ function render() {
   document.getElementById("print-context").innerHTML = `
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
     <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
-    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${v ? `${labelMagnitud().toLowerCase()} ERP vendedor` : labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado 28/08/2026</div>
+    <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${v ? `${labelMagnitud().toLowerCase()} ERP vendedor` : labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado 29/08/2026</div>
   `;
 
   // resumen + tabla
