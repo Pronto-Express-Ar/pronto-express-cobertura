@@ -1,1 +1,66 @@
-{"name": "Actualizar panel diariamente", "on": {"schedule": [{"cron": "50 9 * * *"}], "workflow_dispatch": {}}, "permissions": {"contents": "write"}, "jobs": {"actualizar": {"runs-on": "ubuntu-latest", "steps": [{"name": "Checkout", "uses": "actions/checkout@v4"}, {"name": "Setup Python", "uses": "actions/setup-python@v5", "with": {"python-version": "3.12"}}, {"name": "Instalar dependencias", "run": "pip install -r requirements.txt"}, {"name": "Bajar datos de Chess ERP", "env": {"CHESS_BASE_URL": "${{ vars.CHESS_BASE_URL }}", "CHESS_USER": "${{ secrets.CHESS_USER }}", "CHESS_PASSWORD": "${{ secrets.CHESS_PASSWORD }}"}, "run": "python scripts/fetch_data.py"}, {"name": "Preparar datos", "run": "python scripts/prepare_multi.py"}, {"name": "Generar index.html", "run": "python scripts/build_html.py"}, {"name": "Commit y push si cambio algo", "run": "git config user.name \"github-actions[bot]\" && git config user.email \"github-actions[bot]@users.noreply.github.com\" && git add index.html && (git diff --cached --quiet && echo \"Sin cambios\" || (git commit -m \"Actualizacion automatica de datos\" && git push))"}]}}}
+{
+  "name": "Actualizar panel diariamente",
+  "on": {
+    "schedule": [
+      {"cron": "50 9 * * *"},
+      {"cron": "23 10 * * *"},
+      {"cron": "47 11 * * *"}
+    ],
+    "workflow_dispatch": {}
+  },
+  "concurrency": {
+    "group": "pronto-panel-daily-update",
+    "cancel-in-progress": false
+  },
+  "permissions": {"contents": "write"},
+  "jobs": {
+    "actualizar": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {"name": "Checkout", "uses": "actions/checkout@v4"},
+        {
+          "name": "Verificar si el panel ya se actualizo hoy",
+          "id": "freshness",
+          "shell": "bash",
+          "run": "if [ \"${{ github.event_name }}\" = \"workflow_dispatch\" ]; then\n  echo \"needs_update=true\" >> \"$GITHUB_OUTPUT\"\n  echo \"Actualizacion manual: se fuerza una nueva consulta a Chess.\"\n  exit 0\nfi\nTODAY=$(TZ=America/Argentina/Buenos_Aires date +%d/%m/%Y)\nif grep -q \"Generado: <b>${TODAY}</b>\" index.html; then\n  echo \"needs_update=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"El panel ya fue actualizado hoy (${TODAY}); este intento de respaldo no repite la consulta.\"\nelse\n  echo \"needs_update=true\" >> \"$GITHUB_OUTPUT\"\n  echo \"El panel todavia no fue actualizado hoy (${TODAY}); se inicia la consulta a Chess.\"\nfi"
+        },
+        {
+          "name": "Setup Python",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "uses": "actions/setup-python@v5",
+          "with": {"python-version": "3.12"}
+        },
+        {
+          "name": "Instalar dependencias",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "run": "pip install -r requirements.txt"
+        },
+        {
+          "name": "Bajar datos de Chess ERP",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "env": {
+            "CHESS_BASE_URL": "${{ vars.CHESS_BASE_URL }}",
+            "CHESS_USER": "${{ secrets.CHESS_USER }}",
+            "CHESS_PASSWORD": "${{ secrets.CHESS_PASSWORD }}"
+          },
+          "run": "python scripts/fetch_data.py"
+        },
+        {
+          "name": "Preparar datos",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "run": "python scripts/prepare_multi.py"
+        },
+        {
+          "name": "Generar index.html",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "run": "python scripts/build_html.py"
+        },
+        {
+          "name": "Commit y push si cambio algo",
+          "if": "steps.freshness.outputs.needs_update == 'true'",
+          "run": "git config user.name \"github-actions[bot]\" && git config user.email \"github-actions[bot]@users.noreply.github.com\" && git add index.html && (git diff --cached --quiet && echo \"Sin cambios\" || (git commit -m \"Actualizacion automatica de datos\" && git push))"
+        }
+      ]
+    }
+  }
+}
