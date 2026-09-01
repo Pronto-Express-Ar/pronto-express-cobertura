@@ -433,8 +433,8 @@
       <div class="filter-group">
         <label>Analizar por</label>
         <div class="pill-toggles">
-          <label><input type="radio" name="f-metric" id="metric-money" value="money" checked> Dinero ($)</label>
-          <label><input type="radio" name="f-metric" id="metric-kg" value="kg"> Kilos (kg)</label>
+          <label><input type="radio" name="f-metric" id="metric-money" value="money"> Dinero ($)</label>
+          <label><input type="radio" name="f-metric" id="metric-kg" value="kg" checked> Kilos (kg)</label>
         </div>
       </div>
       <div class="filter-group">
@@ -767,7 +767,7 @@ const state = {
   fechaHasta: null,
   subcanales: new Set(),
   marcas: new Set(),
-  metric: "money",
+  metric: "kg",
   dailySelectedDate: null,
 };
 function fmtValor(n) { return state.metric === "kg" ? kilos(n) : money(n); }
