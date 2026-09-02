@@ -2295,21 +2295,22 @@ function render() {
     if (totalPareto && acum / totalPareto * 100 >= 80) break;
   }
 
-  // objetivo del mes (+10% vs mes anterior) y tendencia, siempre mes actual vs mes anterior (no depende de los meses tildados)
+  // Los objetivos usan siempre el ultimo mes contra el anterior. La tarjeta de
+  // variacion y los estados de clientes usan los meses elegidos en Comparativa.
   const mesesInfo = computeMesActualAnterior();
   const comparisonInfo = state.compareBase && state.compareCurrent
     ? { anterior: state.compareBase, actual: state.compareCurrent }
     : mesesInfo;
   let objEmpresa = null, objCurrent = null, comparativoCurrent = null;
   let riesgoNuevos = { riesgo: 0, recuperados: 0, clientesRiesgo: [], clientesRecuperados: [] };
+  const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
+  const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
   if (mesesInfo) {
-    const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
-    const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
     objEmpresa = sumaMesesCliente(todosClientesVisibles, articleScope, mesesInfo.actual, mesesInfo.anterior);
     objCurrent = sumaMesesCliente(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
-    comparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, mesesInfo.actual, mesesInfo.anterior, v);
   }
   if (comparisonInfo) {
+    comparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, comparisonInfo.actual, comparisonInfo.anterior, v);
     riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, comparisonInfo.actual, comparisonInfo.anterior, v);
   }
 
@@ -2327,12 +2328,11 @@ function render() {
   const variacionValor = variacionComparable === null
     ? "Sin base"
     : `${variacionComparable >= 0 ? "+" : ""}${variacionComparable.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const mesAnteriorLabel = mesesInfo ? (mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior) : "mes anterior";
-  const comparativoSub = comparativoCurrent
-    ? `vs ${esc(mesAnteriorLabel)} &middot; mismos ${comparativoCurrent.diasComparados} dia${comparativoCurrent.diasComparados === 1 ? "" : "s"} de venta &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
-    : "se calcula cuando hay dos meses disponibles";
   const compareBaseLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.anterior) || comparisonInfo.anterior) : "mes base";
   const compareCurrentLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.actual) || comparisonInfo.actual) : "mes comparado";
+  const comparativoSub = comparativoCurrent
+    ? `${esc(compareCurrentLabel)} vs ${esc(compareBaseLabel)} &middot; mismos ${comparativoCurrent.diasComparados} dia${comparativoCurrent.diasComparados === 1 ? "" : "s"} de venta &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
+    : "se calcula cuando hay dos meses disponibles";
   const tiles = [
     { label: v ? `${labelMagnitud()} ERP del vendedor` : `${labelMagnitud()} del periodo`, value: fmtValor(total), sub: v ? "segun vendedor del comprobante" : productLabel },
     { label: "Ticket promedio", value: fmtValor(metricCompradores.length ? total / metricCompradores.length : 0), sub: "por cliente que compra" },
