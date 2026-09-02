@@ -2066,15 +2066,16 @@ function renderClientesRecuperados(data, mesesInfo, isKg, mesLabelByKey) {
   return rows;
 }
 function sumaMesComparable(clientIdSet, articleScope, mesActual, mesAnterior, vendedor = "") {
-  let ultimaFechaActual = "";
-  for (const row of VENTAS) {
-    const fecha = row[2];
-    if (fecha.slice(0, 7) === mesActual && fecha > ultimaFechaActual) ultimaFechaActual = fecha;
-  }
-  const diaCorte = ultimaFechaActual ? Number(ultimaFechaActual.slice(8, 10)) : 0;
-  const [anioAnt, mesAnt] = mesAnterior.split("-").map(Number);
-  const ultimoDiaAnterior = new Date(Date.UTC(anioAnt, mesAnt, 0)).getUTCDate();
-  const corteAnterior = Math.min(diaCorte, ultimoDiaAnterior);
+  // Compara la misma cantidad de dias efectivos de venta. Usar el mismo dia
+  // calendario deja la base en cero cuando el mes anterior comenzo en fin de semana.
+  const fechasActual = Array.from(new Set(VENTAS
+    .filter(row => row[2].slice(0, 7) === mesActual)
+    .map(row => row[2]))).sort();
+  const fechasAnterior = Array.from(new Set(VENTAS
+    .filter(row => row[2].slice(0, 7) === mesAnterior)
+    .map(row => row[2]))).sort();
+  const diasComparados = fechasActual.length;
+  const fechasAnterioresComparables = new Set(fechasAnterior.slice(0, diasComparados));
   let actualImp = 0, actualKg = 0, anteriorImp = 0, anteriorKg = 0;
   for (const row of VENTAS) {
     const [c, a, fecha, imp, kg] = row;
@@ -2085,12 +2086,12 @@ function sumaMesComparable(clientIdSet, articleScope, mesActual, mesAnterior, ve
     if (mk === mesActual) {
       actualImp += imp;
       actualKg += kg;
-    } else if (mk === mesAnterior && Number(fecha.slice(8, 10)) <= corteAnterior) {
+    } else if (mk === mesAnterior && fechasAnterioresComparables.has(fecha)) {
       anteriorImp += imp;
       anteriorKg += kg;
     }
   }
-  return { actualImp, actualKg, anteriorImp, anteriorKg, diaCorte: corteAnterior };
+  return { actualImp, actualKg, anteriorImp, anteriorKg, diasComparados };
 }
 function objetivoFila(label, actual, anterior, fmt) {
   const objetivo = anterior * 1.10;
@@ -2328,7 +2329,7 @@ function render() {
     : `${variacionComparable >= 0 ? "+" : ""}${variacionComparable.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const mesAnteriorLabel = mesesInfo ? (mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior) : "mes anterior";
   const comparativoSub = comparativoCurrent
-    ? `vs ${esc(mesAnteriorLabel)} hasta el dia ${comparativoCurrent.diaCorte} &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
+    ? `vs ${esc(mesAnteriorLabel)} &middot; mismos ${comparativoCurrent.diasComparados} dia${comparativoCurrent.diasComparados === 1 ? "" : "s"} de venta &middot; ${fmtValor(actualComparable)} vs ${fmtValor(anteriorComparable)}`
     : "se calcula cuando hay dos meses disponibles";
   const compareBaseLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.anterior) || comparisonInfo.anterior) : "mes base";
   const compareCurrentLabel = comparisonInfo ? (mesLabelByKey.get(comparisonInfo.actual) || comparisonInfo.actual) : "mes comparado";
