@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Cobertura de Producto &middot; Pronto Express</title>
+<link rel="stylesheet" href="scripts/incentives.css">
 <style>
   .viz-root {
     color-scheme: light;
@@ -512,6 +513,7 @@
     <button class="tab-btn" id="tab-analysis" type="button">An&aacute;lisis avanzado</button>
     <button class="tab-btn" id="tab-daily" type="button">An&aacute;lisis diario</button>
     <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
+    <button class="tab-btn" id="tab-incentives" type="button">Objetivos premios</button>
   </div>
 
   <div id="results-empty" class="card" style="display:none">
@@ -700,6 +702,19 @@
       <p class="lede" style="margin-bottom:14px">Mismos filtros de vendedor/zona/dia/subcanal/mes que la vista general, pero sin importar el producto o proveedor tildado a la izquierda: compara siempre estos 3 proveedores entre si.</p>
       <div id="top3-table"></div>
     </div>
+  </div>
+
+  <div id="incentive-results" style="display:none">
+    <div class="card incentive-intro">
+      <div>
+        <h2>Objetivos para premios &mdash; Septiembre 2026</h2>
+        <p class="lede">Seguimiento por vendedor contra agosto de 2026. Los productos normales y sus versiones de oferta cuentan juntos.</p>
+      </div>
+      <div class="incentive-period"><b>Base:</b> Agosto 2026 <span>&rarr;</span> <b>Objetivo:</b> Septiembre 2026</div>
+    </div>
+    <div class="incentive-summary-grid" id="incentive-company-summary" aria-live="polite"></div>
+    <div class="incentive-seller-grid" id="incentive-seller-cards"></div>
+    <div id="incentive-detail" aria-live="polite"></div>
   </div>
 
   </div>
@@ -1130,16 +1145,20 @@ document.getElementById("tab-general").addEventListener("click", () => switchTab
 document.getElementById("tab-analysis").addEventListener("click", () => switchTab("analysis"));
 document.getElementById("tab-daily").addEventListener("click", () => switchTab("daily"));
 document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
+document.getElementById("tab-incentives").addEventListener("click", () => switchTab("incentives"));
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById("tab-general").classList.toggle("active", tab === "general");
   document.getElementById("tab-analysis").classList.toggle("active", tab === "analysis");
   document.getElementById("tab-daily").classList.toggle("active", tab === "daily");
   document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
+  document.getElementById("tab-incentives").classList.toggle("active", tab === "incentives");
   document.getElementById("results").style.display = tab === "general" ? "block" : "none";
   document.getElementById("analysis-results").style.display = tab === "analysis" ? "block" : "none";
   document.getElementById("daily-results").style.display = tab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
+  document.getElementById("incentive-results").style.display = tab === "incentives" ? "block" : "none";
+  if (tab === "incentives" && window.renderIncentives) window.renderIncentives();
 }
 document.getElementById("daily-date-select").addEventListener("change", event => {
   state.dailySelectedDate = event.target.value || null;
@@ -2527,5 +2546,6 @@ document.getElementById("tiles").addEventListener("click", (event) => {
 
 render();
 </script>
+<script src="scripts/incentives.js"></script>
 </body>
 </html>

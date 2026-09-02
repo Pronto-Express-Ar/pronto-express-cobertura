@@ -1,0 +1,147 @@
+#incentive-results {
+  --card: var(--surface-1);
+  --bg: var(--page);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --series1: var(--series-1);
+  --yes: var(--status-good);
+}
+.incentive-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+.incentive-intro h2 { margin: 0 0 6px; }
+.incentive-intro .lede { margin: 0; color: var(--muted); }
+.incentive-period {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 80%, var(--series1) 20%);
+  color: var(--text);
+  white-space: nowrap;
+}
+.incentive-period span { color: var(--series1); padding: 0 6px; }
+.incentive-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.incentive-stat,
+.incentive-seller-card,
+.incentive-detail-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+}
+.incentive-stat { padding: 16px; }
+.incentive-stat-label { color: var(--muted); font-size: 12px; }
+.incentive-stat-value { display: block; margin-top: 5px; font-size: 25px; font-weight: 800; }
+.incentive-stat-note { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.incentive-seller-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+button.incentive-seller-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+button.incentive-seller-card:hover { transform: translateY(-2px); border-color: var(--series1); }
+button.incentive-seller-card.selected { border-color: var(--series1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--series1) 28%, transparent); }
+.incentive-ring {
+  --p: 0;
+  --ring-color: var(--series1);
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), color-mix(in srgb, var(--border) 65%, transparent) 0);
+  position: relative;
+  animation: incentivePop .55s ease both;
+}
+.incentive-ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card); }
+.incentive-ring span { position: relative; z-index: 1; font-size: 14px; font-weight: 800; }
+.incentive-seller-copy { min-width: 0; }
+.incentive-seller-copy b { display: block; font-size: 15px; }
+.incentive-seller-copy strong { display: block; margin-top: 4px; font-size: 18px; }
+.incentive-seller-copy small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.35; }
+.incentive-detail-card { padding: 20px; }
+.incentive-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 14px;
+}
+.incentive-detail-head h2 { margin: 0 0 5px; }
+.incentive-detail-head p { margin: 0; color: var(--muted); }
+.incentive-award { text-align: right; }
+.incentive-award small { display: block; color: var(--muted); }
+.incentive-award strong { display: block; margin-top: 3px; color: var(--series1); font-size: 26px; }
+.incentive-provider { padding: 18px 0; border-top: 1px solid var(--border); }
+.incentive-provider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.incentive-provider-head h3 { margin: 0; font-size: 17px; }
+.incentive-provider-head span { color: var(--muted); font-size: 12px; }
+.incentive-metric { margin-top: 14px; padding: 14px; border-radius: 12px; background: color-mix(in srgb, var(--card) 84%, var(--bg) 16%); border: 1px solid var(--border); }
+.incentive-metric-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; }
+.incentive-metric-title b { display: block; }
+.incentive-metric-title small { display: block; margin-top: 3px; color: var(--muted); }
+.incentive-status { flex: 0 0 auto; font-size: 12px; font-weight: 800; padding: 5px 9px; border-radius: 999px; }
+.incentive-status.pending { color: var(--series1); background: color-mix(in srgb, var(--series1) 15%, transparent); }
+.incentive-status.partial { color: #b86d00; background: color-mix(in srgb, #f59e0b 18%, transparent); }
+.incentive-status.done { color: var(--yes); background: color-mix(in srgb, var(--yes) 15%, transparent); }
+.incentive-track { height: 14px; border-radius: 999px; background: color-mix(in srgb, var(--border) 72%, transparent); position: relative; overflow: visible; }
+.incentive-fill { height: 100%; width: calc(var(--progress) * 1%); max-width: 100%; border-radius: inherit; transform-origin: left; animation: incentiveGrow .8s cubic-bezier(.2,.8,.2,1) both; }
+.incentive-fill.pending { background: var(--series1); }
+.incentive-fill.partial { background: #f59e0b; }
+.incentive-fill.done { background: var(--yes); }
+.incentive-marker { position: absolute; left: calc(var(--marker) * 1%); top: -4px; width: 2px; height: 22px; background: var(--text); opacity: .55; }
+.incentive-metric-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.incentive-metric-foot strong { color: var(--text); }
+.incentive-products { margin-top: 9px; }
+.incentive-products summary { color: var(--series1); cursor: pointer; font-size: 12px; font-weight: 700; }
+.incentive-products ul { margin: 8px 0 0; padding-left: 20px; columns: 2; column-gap: 24px; }
+.incentive-products li { break-inside: avoid; margin-bottom: 5px; color: var(--muted); font-size: 12px; }
+.incentive-products code { color: var(--text); }
+.incentive-offer { display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 5px; color: #b86d00; background: color-mix(in srgb, #f59e0b 18%, transparent); font-size: 10px; font-weight: 800; }
+.incentive-note { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--series1); background: color-mix(in srgb, var(--series1) 8%, transparent); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.incentive-empty { padding: 30px; text-align: center; color: var(--muted); }
+@keyframes incentiveGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes incentivePop { from { transform: scale(.82); opacity: .25; } to { transform: scale(1); opacity: 1; } }
+@media (max-width: 900px) {
+  .incentive-summary-grid { grid-template-columns: 1fr; }
+  .incentive-intro, .incentive-detail-head { align-items: stretch; flex-direction: column; }
+  .incentive-period { white-space: normal; }
+  .incentive-award { text-align: left; }
+}
+@media (max-width: 620px) {
+  .incentive-seller-grid { grid-template-columns: 1fr; }
+  .incentive-detail-card { padding: 14px; }
+  .incentive-metric-head, .incentive-metric-foot, .incentive-provider-head { flex-direction: column; }
+  .incentive-products ul { columns: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .incentive-fill, .incentive-ring { animation: none; }
+  button.incentive-seller-card { transition: none; }
+}
