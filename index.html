@@ -138,6 +138,8 @@
   .btn-link { font: inherit; font-size: 12.5px; color: var(--series-1); background: none; border: none; cursor: pointer; padding: 4px 0; text-decoration: underline; }
 
   .product-groups { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; }
+  .line-picker-label { display: block; margin: 10px 0 3px; font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .line-picker-help { margin: 0 0 7px; font-size: 11.5px; color: var(--text-secondary); }
   .product-groups details { border-bottom: 1px solid var(--gridline); padding: 6px 0; }
   .product-groups details:last-child { border-bottom: none; }
   .product-groups summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 2px; list-style: none; display: flex; align-items: center; gap: 8px; }
@@ -412,8 +414,8 @@
   <div class="layout">
   <aside class="sidebar">
   <div class="card">
-    <h2>1. Elegi el producto (o varios) a analizar</h2>
-    <p class="lede" style="margin-bottom:10px">Busca por nombre, filtra por proveedor o abri una linea de producto y tilda los articulos que quieras agrupar como "un solo producto" (por ejemplo, toda la linea de Untables). Sin nada tildado, el panel muestra el <b>general</b> (todo el catalogo junto). El resto del panel se recalcula al instante.</p>
+    <h2>1. Elegi la linea de producto (o productos individuales)</h2>
+    <p class="lede" style="margin-bottom:10px">Tilda una <b>linea de producto</b> completa o usa la flecha para desplegarla y elegir productos individuales. Tambien podes buscar por nombre, codigo o linea y combinarlo con uno o mas proveedores. Sin nada tildado, el panel muestra el <b>general</b>.</p>
     <label for="product-search" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:5px">Buscar producto (nombre, codigo o linea)</label>
     <div class="product-toolbar">
       <input type="search" id="product-search" placeholder="Ej.: ralladito, 440669 o untables...">
@@ -424,6 +426,8 @@
       <div class="pill-toggles" id="marca-toggles" style="flex-direction:column;flex-wrap:nowrap;border:1px solid var(--border);border-radius:8px;padding:6px 8px"></div>
     </div>
     <div id="selected-chips"></div>
+    <span class="line-picker-label">Lineas de producto</span>
+    <p class="line-picker-help">Casilla: selecciona toda la linea &middot; Flecha: muestra sus productos</p>
     <div class="product-groups" id="product-groups"></div>
   </div>
 
@@ -922,6 +926,8 @@ document.getElementById("clear-products").addEventListener("click", () => {
   state.compareCurrent = MESES.length ? MESES[MESES.length - 1].key : "";
   compareBaseSel.value = state.compareBase;
   compareCurrentSel.value = state.compareCurrent;
+  state.metric = "kg";
+  metricRadios.forEach(r => r.checked = r.value === "kg");
 
   render();
 });
@@ -1094,7 +1100,12 @@ function aplicarQuincena(numero) {
 }
 
 mesChecks.forEach(cb => cb.addEventListener("change", () => {
-  state.months = new Set(Array.from(mesChecks).filter(c => c.checked).map(c => c.value));
+  const checked = Array.from(mesChecks).filter(c => c.checked);
+  if (checked.length === 0) {
+    cb.checked = true;
+    return;
+  }
+  state.months = new Set(checked.map(c => c.value));
   render();
 }));
 metricRadios.forEach(r => r.addEventListener("change", () => {
