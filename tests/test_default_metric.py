@@ -24,6 +24,24 @@ class DefaultMetricTests(unittest.TestCase):
     def test_kilos_is_the_initial_application_state(self):
         self.assertRegex(self.html, r'\bmetric:\s*"kg"')
 
+    def test_clear_all_filters_restores_kilos(self):
+        clear_handler = re.search(
+            r'document\.getElementById\("clear-products"\).*?\n\}\);',
+            self.html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(clear_handler)
+        self.assertIn('state.metric = "kg"', clear_handler.group(0))
+        self.assertIn('r.value === "kg"', clear_handler.group(0))
+
+    def test_last_selected_month_cannot_be_unchecked(self):
+        self.assertRegex(self.html, r'if \(checked\.length === 0\)\s*\{\s*cb\.checked = true;')
+
+    def test_product_picker_is_explicitly_grouped_by_line(self):
+        self.assertIn("Lineas de producto", self.html)
+        self.assertIn('class="line-check"', self.html)
+        self.assertIn('class="product-check"', self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
