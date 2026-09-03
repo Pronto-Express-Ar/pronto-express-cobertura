@@ -19,8 +19,8 @@ class IncentiveDashboardTests(unittest.TestCase):
     def test_tab_and_assets_are_wired(self):
         self.assertIn('id="tab-incentives"', self.html)
         self.assertIn('id="incentive-results"', self.html)
-        self.assertIn('href="scripts/incentives.css"', self.html)
-        self.assertIn('src="scripts/incentives.js"', self.html)
+        self.assertRegex(self.html, r'href="scripts/incentives\.css(?:\?v=[^"]+)?"')
+        self.assertRegex(self.html, r'src="scripts/incentives\.js(?:\?v=[^"]+)?"')
         self.assertIn('window.renderIncentives', self.js)
 
     def test_client_list_filters_are_wired(self):
