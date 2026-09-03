@@ -12,6 +12,8 @@
   ];
   const COVERAGE_PRIZE = 25000;
   let selectedSeller = null;
+  const clientFilters = { days: new Set(), zone: "all" };
+  const DAY_ORDER = ["Lunes", "Martes", "Miercoles", "Miércoles", "Jueves", "Viernes", "Telefónica", "Mostrador / Personales", "Online / Mostrador", "Online", "Mostrador", "Sin ruta"];
 
   function norm(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -89,6 +91,23 @@
   function rowKg(row) { return Number(row[4]) || 0; }
   function rowAmount(row) { return Number(row[3]) || 0; }
 
+  function clientZoneLabel(client) {
+    return client.z === "Zona Paulina" ? "Zona Paulina" : "Fuera de Zona Paulina";
+  }
+
+  function clientMatchesListFilters(client) {
+    if (clientFilters.days.size && !clientFilters.days.has(client.d || "Sin ruta")) return false;
+    if (clientFilters.zone === "in" && client.z !== "Zona Paulina") return false;
+    if (clientFilters.zone === "out" && client.z === "Zona Paulina") return false;
+    return true;
+  }
+
+  function listFilterText() {
+    const days = clientFilters.days.size ? Array.from(clientFilters.days).join(", ") : "Todos los días";
+    const zone = clientFilters.zone === "in" ? "Zona Paulina" : clientFilters.zone === "out" ? "Fuera de Zona Paulina" : "Todas las zonas";
+    return `${days} · ${zone}`;
+  }
+
   function payoutRatio(value, partialFrom, fullAt) {
     if (!Number.isFinite(value) || value < partialFrom) return 0;
     if (value >= fullAt) return 1;
@@ -126,7 +145,11 @@
       current.amount += rowAmount(row);
       perClient.set(clientId, current);
     });
-    const buyers = Array.from(perClient.values()).filter(value => value.kg > 0 || value.amount > 0).length;
+    const clients = universe.map(client => {
+      const value = perClient.get(String(client.id)) || { kg: 0, amount: 0 };
+      return { client, bought: value.kg > 0 || value.amount > 0, kg: value.kg, amount: value.amount };
+    });
+    const buyers = clients.filter(value => value.bought).length;
     const percentage = universe.length ? buyers * 100 / universe.length : 0;
     const ratio = payoutRatio(percentage, provider.coveragePartial, provider.coverageTarget);
     return {
@@ -136,7 +159,8 @@
       targetClients: Math.ceil(universe.length * provider.coverageTarget / 100),
       missingClients: Math.max(0, Math.ceil(universe.length * provider.coverageTarget / 100) - buyers),
       ratio,
-      payout: COVERAGE_PRIZE * ratio
+      payout: COVERAGE_PRIZE * ratio,
+      clients
     };
   }
 
@@ -178,6 +202,35 @@
     return `<details class="incentive-products"><summary>Ver ${articles.length} SKU incluidos${offers ? ` (${offers} de oferta)` : ""}</summary><ul>${items || "<li>Sin SKU coincidentes</li>"}</ul></details>`;
   }
 
+  function filteredClientRows(result) {
+    return result.clients.filter(item => clientMatchesListFilters(item.client)).slice().sort((a, b) => {
+      if (a.bought !== b.bought) return a.bought ? 1 : -1;
+      const dayA = DAY_ORDER.indexOf(a.client.d), dayB = DAY_ORDER.indexOf(b.client.d);
+      const orderA = dayA < 0 ? 999 : dayA, orderB = dayB < 0 ? 999 : dayB;
+      return orderA - orderB || String(a.client.n).localeCompare(String(b.client.n), "es");
+    });
+  }
+
+  function clientList(result, seller, provider) {
+    const rows = filteredClientRows(result);
+    const buyers = rows.filter(item => item.bought).length;
+    const missing = rows.length - buyers;
+    const sellerName = vendedoresSet.get(Number(seller)) || "Vendedor";
+    const rowHtml = rows.map(({ client, bought }) => `<tr class="${bought ? "client-bought" : "client-missing"}">
+      <td>${esc(String(client.id))}</td><td>${esc(client.n)}</td><td>${esc(client.loc || "-")}</td><td>${esc(client.d || "Sin ruta")}</td><td>${esc(client.sc || "-")}</td><td>${esc(clientZoneLabel(client))}</td><td class="client-status">${bought ? "✓ Compró" : "✕ No compró"}</td>
+    </tr>`).join("");
+    const emptyText = provider.zoneOnly && clientFilters.zone === "out"
+      ? "Este objetivo de La Paulina solamente aplica a clientes dentro de Zona Paulina."
+      : "No hay clientes para los filtros elegidos.";
+    return `<details class="incentive-clients">
+      <summary>Ver clientes: ${rows.length} filtrados · ${buyers} compraron · ${missing} no compraron</summary>
+      <div class="incentive-client-panel">
+        <div class="incentive-client-toolbar"><span>V${esc(String(seller))} · ${esc(sellerName)} · ${esc(listFilterText())}</span><button type="button" class="incentive-export-button" data-export-incentive-clients="${esc(result.group.id)}" data-seller="${esc(String(seller))}">📊 Exportar estos clientes a Excel</button></div>
+        ${rows.length ? `<div class="incentive-client-table-wrap"><table class="incentive-client-table"><thead><tr><th>Código</th><th>Cliente</th><th>Localidad</th><th>Día ruta</th><th>Subcanal</th><th>Zona</th><th>Estado</th></tr></thead><tbody>${rowHtml}</tbody></table></div>` : `<div class="incentive-client-empty">${esc(emptyText)}</div>`}
+      </div>
+    </details>`;
+  }
+
   function kgMetric(result) {
     const ratio = result.kgRatio;
     const status = statusFor(ratio);
@@ -192,7 +245,7 @@
     </div>`;
   }
 
-  function coverageMetric(result, provider) {
+  function coverageMetric(result, provider, seller) {
     const status = statusFor(result.ratio);
     const progress = provider.coverageTarget ? clamp(result.percentage / provider.coverageTarget * 100, 0, 100) : 0;
     const partialMarker = provider.coveragePartial / provider.coverageTarget * 100;
@@ -201,6 +254,7 @@
       <div class="incentive-track"><div class="incentive-fill ${status.key}" style="--progress:${progress}"></div><span class="incentive-marker" style="--marker:${partialMarker}" title="Desde aquí comienza el premio parcial"></span></div>
       <div class="incentive-metric-foot"><span>Cobertura <strong>${pct(result.percentage)}</strong> · ${result.buyers} de ${result.universe} clientes</span><span>Meta ${pct(provider.coverageTarget)} = <strong>${result.targetClients} clientes</strong> · ${result.missingClients ? `Faltan <strong>${result.missingClients}</strong>` : "Objetivo alcanzado"} · Premio estimado <strong>${money(result.payout)}</strong></span></div>
       ${productList(result.group)}
+      ${clientList(result, seller, provider)}
     </div>`;
   }
 
@@ -211,7 +265,7 @@
       return `<section class="incentive-provider">
         <div class="incentive-provider-head"><h3>${esc(providerResult.provider.name)}</h3><span>Universo de cobertura: ${scope}</span></div>
         ${providerResult.provider.kgPrize > 0 ? kgMetric(providerResult) : ""}
-        ${providerResult.groups.map(group => coverageMetric(group, providerResult.provider)).join("")}
+        ${providerResult.groups.map(group => coverageMetric(group, providerResult.provider, result.seller)).join("")}
       </section>`;
     }).join("");
     return `<div class="incentive-detail-card">
@@ -219,6 +273,94 @@
       ${providerHtml}
       <div class="incentive-note"><b>Criterio del incentivo:</b> las ventas se asignan por vendedor del comprobante en Chess. La cobertura usa los clientes activos que ese vendedor tiene hoy en sus rutas. Las variantes normales y <b>*OFERTA*</b> se consolidan en la misma familia. Los importes son una estimación según la escala acordada. La comisión de cobranza del 0,5% neto sin IVA no se calcula aquí porque requiere datos de cobranzas, no de ventas.</div>
     </div>`;
+  }
+
+  function renderClientFilters() {
+    const container = document.getElementById("incentive-client-filters");
+    if (!container) return;
+    const days = Array.from(new Set(CLIENTES.filter(client => client.v != null).map(client => client.d || "Sin ruta"))).sort((a, b) => {
+      const ia = DAY_ORDER.indexOf(a), ib = DAY_ORDER.indexOf(b);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b, "es");
+    });
+    const dayButtons = [`<button type="button" class="incentive-filter-button${clientFilters.days.size ? "" : " active"}" data-incentive-day="all">Todos</button>`, ...days.map(day => `<button type="button" class="incentive-filter-button${clientFilters.days.has(day) ? " active" : ""}" data-incentive-day="${esc(day)}">${esc(day)}</button>`)].join("");
+    const zoneButtons = [
+      ["all", "Todas"], ["in", "Zona Paulina"], ["out", "Fuera de Zona Paulina"]
+    ].map(([value, label]) => `<button type="button" class="incentive-filter-button${clientFilters.zone === value ? " active" : ""}" data-incentive-zone="${value}">${label}</button>`).join("");
+    container.innerHTML = `<div class="incentive-filter-group"><b>Días de ruta (podés elegir varios)</b><div class="incentive-filter-buttons">${dayButtons}</div></div><div class="incentive-filter-group"><b>Zona de clientes</b><div class="incentive-filter-buttons">${zoneButtons}</div></div><p class="incentive-filter-note">Estos filtros modifican los listados y sus exportaciones. El cálculo oficial del premio mantiene el universo completo definido para cada proveedor.</p>`;
+  }
+
+  function incentiveSheetXml(metaLines, headers, rows) {
+    const xmlRows = [];
+    let rowNumber = 1;
+    metaLines.forEach((line, index) => {
+      xmlRows.push(`<row r="${rowNumber}" ht="22" customHeight="1"><c r="A${rowNumber}" s="${index === 0 ? 4 : 5}" t="inlineStr"><is><t>${escXml(line)}</t></is></c></row>`);
+      rowNumber += 1;
+    });
+    rowNumber += 1;
+    const headerRow = rowNumber;
+    xmlRows.push(`<row r="${rowNumber}" ht="30" customHeight="1">${headers.map((header, index) => `<c r="${colLetter(index)}${rowNumber}" s="1" t="inlineStr"><is><t>${escXml(header)}</t></is></c>`).join("")}</row>`);
+    rowNumber += 1;
+    rows.forEach(item => {
+      const style = item.bought ? 2 : 3;
+      const cells = item.cells.map((cell, index) => {
+        const ref = `${colLetter(index)}${rowNumber}`;
+        return cell.t === "n" ? `<c r="${ref}" s="${style}"><v>${cell.v}</v></c>` : `<c r="${ref}" s="${style}" t="inlineStr"><is><t>${escXml(cell.v)}</t></is></c>`;
+      }).join("");
+      xmlRows.push(`<row r="${rowNumber}">${cells}</row>`);
+      rowNumber += 1;
+    });
+    const endRow = Math.max(headerRow, rowNumber - 1);
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="${headerRow}" topLeftCell="A${headerRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="12" customWidth="1"/><col min="2" max="2" width="38" customWidth="1"/><col min="3" max="3" width="18" customWidth="1"/><col min="4" max="4" width="17" customWidth="1"/><col min="5" max="5" width="23" customWidth="1"/><col min="6" max="6" width="23" customWidth="1"/><col min="7" max="7" width="16" customWidth="1"/></cols><sheetData>${xmlRows.join("")}</sheetData><mergeCells count="${metaLines.length}">${metaLines.map((_, index) => `<mergeCell ref="A${index + 1}:G${index + 1}"/>`).join("")}</mergeCells><autoFilter ref="A${headerRow}:G${endRow}"/><pageMargins left="0.25" right="0.25" top="0.45" bottom="0.45" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  }
+
+  function buildIncentiveXlsx(sheetXml) {
+    const encoder = new TextEncoder();
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+    const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+    const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Clientes objetivo" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+    const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Calibri"/><color rgb="FF0F172A"/></font><font><b/><sz val="11"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font></fonts><fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF172554"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDCFCE7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDBEAFE"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFCBD5E1"/></left><right style="thin"><color rgb="FFCBD5E1"/></right><top style="thin"><color rgb="FFCBD5E1"/></top><bottom style="thin"><color rgb="FFCBD5E1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0"/><xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="6" borderId="0" xfId="0"/></cellXfs></styleSheet>`;
+    return buildZip([
+      { name: "[Content_Types].xml", data: encoder.encode(contentTypes) }, { name: "_rels/.rels", data: encoder.encode(rootRels) }, { name: "xl/workbook.xml", data: encoder.encode(workbook) }, { name: "xl/_rels/workbook.xml.rels", data: encoder.encode(workbookRels) }, { name: "xl/styles.xml", data: encoder.encode(styles) }, { name: "xl/worksheets/sheet1.xml", data: encoder.encode(sheetXml) }
+    ]);
+  }
+
+  function exportIncentiveClients(seller, groupId) {
+    const result = sellerResults(seller);
+    let groupResult = null;
+    let provider = null;
+    result.providers.some(providerResult => {
+      const found = providerResult.groups.find(item => item.group.id === groupId);
+      if (!found) return false;
+      groupResult = found;
+      provider = providerResult.provider;
+      return true;
+    });
+    if (!groupResult || !provider) return;
+    const rows = filteredClientRows(groupResult);
+    const buyers = rows.filter(item => item.bought).length;
+    const sellerName = vendedoresSet.get(Number(seller)) || "Vendedor";
+    const metaLines = [
+      `${provider.name} · ${groupResult.group.label} · Clientes del objetivo`,
+      `V${seller} - ${sellerName} · Septiembre 2026`,
+      `Filtros del listado: ${listFilterText()}`,
+      `${rows.length} clientes · ${buyers} compraron · ${rows.length - buyers} no compraron · Pronto Express`
+    ];
+    const headers = ["Código", "Cliente", "Localidad", "Día de ruta", "Subcanal MKT", "Zona", "Estado"];
+    const exportRows = rows.map(({ client, bought }) => ({ bought, cells: [
+      { t: "n", v: Number(client.id) }, { t: "s", v: client.n || "" }, { t: "s", v: client.loc || "" }, { t: "s", v: client.d || "Sin ruta" }, { t: "s", v: client.sc || "" }, { t: "s", v: clientZoneLabel(client) }, { t: "s", v: bought ? "COMPRÓ" : "NO COMPRÓ" }
+    ] }));
+    const blob = buildIncentiveXlsx(incentiveSheetXml(metaLines, headers, exportRows));
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const clean = value => norm(value).replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").toLowerCase();
+    link.href = url;
+    link.download = `clientes_objetivo_v${seller}_${clean(provider.name)}_${clean(groupResult.group.label)}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   function renderIncentives() {
@@ -232,6 +374,7 @@
     if (!sellerIds.length) {
       summary.innerHTML = ""; cards.innerHTML = ""; detail.innerHTML = '<div class="incentive-empty">No hay vendedores disponibles.</div>'; return;
     }
+    renderClientFilters();
     if (!sellerIds.includes(String(selectedSeller))) selectedSeller = sellerIds[0];
     const results = sellerIds.map(sellerResults);
     const projected = results.reduce((sum, result) => sum + result.payout, 0);
@@ -264,6 +407,28 @@
     selectedSeller = button.dataset.seller;
     renderIncentives();
     document.getElementById("incentive-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("incentive-client-filters")?.addEventListener("click", event => {
+    const dayButton = event.target.closest("[data-incentive-day]");
+    const zoneButton = event.target.closest("[data-incentive-zone]");
+    if (dayButton) {
+      const day = dayButton.dataset.incentiveDay;
+      if (day === "all") clientFilters.days.clear();
+      else if (clientFilters.days.has(day)) clientFilters.days.delete(day);
+      else clientFilters.days.add(day);
+      renderIncentives();
+    }
+    if (zoneButton) {
+      clientFilters.zone = zoneButton.dataset.incentiveZone;
+      renderIncentives();
+    }
+  });
+
+  document.getElementById("incentive-detail")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-export-incentive-clients]");
+    if (!button) return;
+    exportIncentiveClients(button.dataset.seller, button.dataset.exportIncentiveClients);
   });
 
   if (vSel) vSel.addEventListener("change", () => {

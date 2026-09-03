@@ -23,6 +23,25 @@ class IncentiveDashboardTests(unittest.TestCase):
         self.assertIn('src="scripts/incentives.js"', self.html)
         self.assertIn('window.renderIncentives', self.js)
 
+    def test_client_list_filters_are_wired(self):
+        self.assertIn('id="incentive-client-filters"', self.html)
+        self.assertIn('data-incentive-day="all"', self.js)
+        self.assertIn('data-incentive-zone="${value}"', self.js)
+        self.assertIn('const clientFilters = { days: new Set(), zone: "all" }', self.js)
+        self.assertIn("clientMatchesListFilters", self.js)
+
+    def test_client_lists_show_purchase_status(self):
+        self.assertIn('class="${bought ? "client-bought" : "client-missing"}"', self.js)
+        self.assertIn('bought ? "✓ Compró" : "✕ No compró"', self.js)
+        self.assertIn("result.clients.filter", self.js)
+
+    def test_client_export_is_real_xlsx_and_includes_filters(self):
+        self.assertIn("function buildIncentiveXlsx", self.js)
+        self.assertIn("function exportIncentiveClients", self.js)
+        self.assertIn("Filtros del listado: ${listFilterText()}", self.js)
+        self.assertIn(".xlsx`", self.js)
+        self.assertIn('orientation="landscape"', self.js)
+
     def test_campaign_months_and_growth_thresholds(self):
         self.assertIn('const BASE_MONTH = "2026-08"', self.js)
         self.assertIn('const CURRENT_MONTH = "2026-09"', self.js)

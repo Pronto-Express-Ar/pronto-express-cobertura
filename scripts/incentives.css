@@ -25,6 +25,29 @@
   white-space: nowrap;
 }
 .incentive-period span { color: var(--series1); padding: 0 6px; }
+.incentive-client-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: 16px;
+}
+.incentive-filter-group > b { display: block; margin-bottom: 8px; font-size: 13px; }
+.incentive-filter-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.incentive-filter-button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.incentive-filter-button:hover { border-color: var(--series1); color: var(--text); }
+.incentive-filter-button.active { border-color: var(--series1); background: var(--series1); color: #fff; }
+.incentive-filter-note { grid-column: 1 / -1; margin: -5px 0 0; color: var(--muted); font-size: 12px; }
 .incentive-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -125,6 +148,32 @@ button.incentive-seller-card.selected { border-color: var(--series1); box-shadow
 .incentive-products li { break-inside: avoid; margin-bottom: 5px; color: var(--muted); font-size: 12px; }
 .incentive-products code { color: var(--text); }
 .incentive-offer { display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 5px; color: #b86d00; background: color-mix(in srgb, #f59e0b 18%, transparent); font-size: 10px; font-weight: 800; }
+.incentive-clients { margin-top: 9px; border-top: 1px dashed var(--border); padding-top: 9px; }
+.incentive-clients > summary { color: var(--series1); cursor: pointer; font-size: 12px; font-weight: 700; }
+.incentive-client-panel { margin-top: 10px; }
+.incentive-client-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.incentive-client-toolbar span { color: var(--muted); font-size: 12px; }
+.incentive-export-button {
+  border: 1px solid var(--series1);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--series1) 12%, transparent);
+  color: var(--series1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+.incentive-export-button:hover { background: var(--series1); color: #fff; }
+.incentive-client-table-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.incentive-client-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.incentive-client-table th { position: sticky; top: 0; z-index: 1; padding: 8px; background: var(--text); color: var(--bg); text-align: left; white-space: nowrap; }
+.incentive-client-table td { padding: 7px 8px; border-top: 1px solid var(--border); }
+.incentive-client-table tr.client-bought { background: color-mix(in srgb, var(--yes) 13%, transparent); }
+.incentive-client-table tr.client-missing { background: color-mix(in srgb, #d03b3b 13%, transparent); }
+.incentive-client-table tr.client-bought .client-status { color: var(--yes); font-weight: 900; }
+.incentive-client-table tr.client-missing .client-status { color: #d03b3b; font-weight: 900; }
+.incentive-client-empty { padding: 18px; text-align: center; color: var(--muted); }
 .incentive-note { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--series1); background: color-mix(in srgb, var(--series1) 8%, transparent); color: var(--muted); font-size: 12px; line-height: 1.5; }
 .incentive-empty { padding: 30px; text-align: center; color: var(--muted); }
 @keyframes incentiveGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -132,6 +181,8 @@ button.incentive-seller-card.selected { border-color: var(--series1); box-shadow
 @media (max-width: 900px) {
   .incentive-summary-grid { grid-template-columns: 1fr; }
   .incentive-intro, .incentive-detail-head { align-items: stretch; flex-direction: column; }
+  .incentive-client-filters { grid-template-columns: 1fr; }
+  .incentive-filter-note { grid-column: 1; }
   .incentive-period { white-space: normal; }
   .incentive-award { text-align: left; }
 }
@@ -139,6 +190,8 @@ button.incentive-seller-card.selected { border-color: var(--series1); box-shadow
   .incentive-seller-grid { grid-template-columns: 1fr; }
   .incentive-detail-card { padding: 14px; }
   .incentive-metric-head, .incentive-metric-foot, .incentive-provider-head { flex-direction: column; }
+  .incentive-client-toolbar { align-items: stretch; flex-direction: column; }
+  .incentive-export-button { width: 100%; }
   .incentive-products ul { columns: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
