@@ -42,6 +42,11 @@ class IncentiveDashboardTests(unittest.TestCase):
         self.assertIn(".xlsx`", self.js)
         self.assertIn('orientation="landscape"', self.js)
 
+    def test_client_xlsx_uses_excel_worksheet_element_order(self):
+        sheet_data = self.js.index('</sheetData><autoFilter ref=')
+        merged_cells = self.js.index('<mergeCells count=', sheet_data)
+        self.assertLess(sheet_data, merged_cells)
+
     def test_campaign_months_and_growth_thresholds(self):
         self.assertIn('const BASE_MONTH = "2026-08"', self.js)
         self.assertIn('const CURRENT_MONTH = "2026-09"', self.js)
