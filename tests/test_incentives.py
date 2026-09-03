@@ -36,12 +36,19 @@ class IncentiveDashboardTests(unittest.TestCase):
         )
         self.assertRegex(
             self.js,
-            r'name: "SODECAR", kgPrize: 40000, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
+            r'name: "SODECAR", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
         )
         self.assertRegex(
             self.js,
-            r'name: "ORALI", kgPrize: 40000, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
+            r'name: "ORALI", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
         )
+
+    def test_kg_goal_is_rendered_only_for_providers_with_a_prize(self):
+        self.assertIn(
+            'providerResult.provider.kgPrize > 0 ? kgMetric(providerResult) : ""',
+            self.js,
+        )
+        self.assertRegex(self.js, r'if \(provider\.kgPrize > 0\) \{')
 
     def test_every_prize_family_is_present(self):
         expected_ids = {

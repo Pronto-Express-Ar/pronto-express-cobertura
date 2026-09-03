@@ -7,8 +7,8 @@
   const KG_PARTIAL_FROM = 5;
   const PROVIDERS = [
     { name: "LA PAULINA", kgPrize: 50000, coverageTarget: 85, coveragePartial: 70, zoneOnly: true },
-    { name: "SODECAR", kgPrize: 40000, coverageTarget: 50, coveragePartial: 30, zoneOnly: false },
-    { name: "ORALI", kgPrize: 40000, coverageTarget: 50, coveragePartial: 30, zoneOnly: false }
+    { name: "SODECAR", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false },
+    { name: "ORALI", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false }
   ];
   const COVERAGE_PRIZE = 25000;
   let selectedSeller = null;
@@ -152,10 +152,12 @@
       const growth = baseKg > 0 ? (currentKg / baseKg - 1) * 100 : null;
       const kgRatio = baseKg > 0 ? payoutRatio(growth, KG_PARTIAL_FROM, KG_GROWTH_TARGET) : 0;
       const kgPayout = provider.kgPrize * kgRatio;
-      payout += kgPayout;
-      maximum += provider.kgPrize;
-      goalCount += 1;
-      if (kgRatio >= 1) completed += 1;
+      if (provider.kgPrize > 0) {
+        payout += kgPayout;
+        maximum += provider.kgPrize;
+        goalCount += 1;
+        if (kgRatio >= 1) completed += 1;
+      }
       const groups = GROUPS.filter(group => group.provider === provider.name).map(group => {
         const result = groupCoverage(seller, provider, group);
         payout += result.payout;
@@ -208,7 +210,7 @@
       const scope = providerResult.provider.zoneOnly ? "clientes activos de sus rutas dentro de Zona Paulina" : "todos los clientes activos de sus rutas";
       return `<section class="incentive-provider">
         <div class="incentive-provider-head"><h3>${esc(providerResult.provider.name)}</h3><span>Universo de cobertura: ${scope}</span></div>
-        ${kgMetric(providerResult)}
+        ${providerResult.provider.kgPrize > 0 ? kgMetric(providerResult) : ""}
         ${providerResult.groups.map(group => coverageMetric(group, providerResult.provider)).join("")}
       </section>`;
     }).join("");

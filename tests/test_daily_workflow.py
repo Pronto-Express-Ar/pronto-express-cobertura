@@ -12,10 +12,11 @@ class DailyWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
 
-    def test_tiene_horario_principal_y_dos_respaldos(self):
+    def test_tiene_horario_objetivo_y_respaldos_anticipados(self):
         schedules = [entry["cron"] for entry in self.workflow["on"]["schedule"]]
         self.assertIn("50 9 * * *", schedules)
-        self.assertGreaterEqual(len(set(schedules)), 3)
+        self.assertIn("50 5 * * *", schedules)
+        self.assertGreaterEqual(len(set(schedules)), 5)
 
     def test_evitar_consultas_duplicadas_en_intentos_programados(self):
         steps = self.workflow["jobs"]["actualizar"]["steps"]
