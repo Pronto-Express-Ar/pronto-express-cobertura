@@ -226,6 +226,13 @@
   ul.findings { margin: 0; padding-left: 20px; }
   ul.findings li { margin-bottom: 8px; font-size: 14px; }
   ul.findings b { color: var(--text-primary); }
+  .findings-conclusion { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--border); border-left-width: 5px; border-radius: 10px; background: var(--page); }
+  .findings-conclusion.positive { border-left-color: var(--status-good); background: var(--status-good-bg); }
+  .findings-conclusion.warning { border-left-color: var(--series-3); }
+  .findings-conclusion.critical { border-left-color: var(--status-crit); background: var(--status-crit-bg); }
+  .findings-conclusion .conclusion-kicker { display: block; margin-bottom: 3px; color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .findings-conclusion strong { display: block; margin-bottom: 6px; font-size: 17px; color: var(--text-primary); }
+  .findings-conclusion p { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
 
   .chart-svg { width: 100%; height: auto; display: block; }
   .chart-svg .gridline { stroke: var(--gridline); stroke-width: 1; }
@@ -603,6 +610,7 @@
     <div class="card">
       <h2>Hallazgos</h2>
       <ul class="findings" id="findings"></ul>
+      <div class="findings-conclusion" id="findings-conclusion"></div>
     </div>
 
     <div class="card">
@@ -1993,16 +2001,25 @@ function clientesEnRiesgoYNuevos(clientIdSet, articleScope, mesActual, mesAnteri
   }
   const clientesRiesgo = [];
   const clientesRecuperados = [];
+  let compradoresAnterior = 0;
+  let compradoresActual = 0;
+  let clientesRetenidos = 0;
   perCliente.forEach((e, cid) => {
     const comproAnterior = e.anteriorImp > 0 || e.anteriorKg > 0;
     const comproActual = e.actualImp > 0 || e.actualKg > 0;
     const comproHistorico = e.historicoImp > 0 || e.historicoKg > 0;
+    if (comproAnterior) compradoresAnterior++;
+    if (comproActual) compradoresActual++;
+    if (comproAnterior && comproActual) clientesRetenidos++;
     if (comproAnterior && !comproActual) clientesRiesgo.push({ cid, ...e });
     if (comproHistorico && !comproAnterior && comproActual) clientesRecuperados.push({ cid, ...e });
   });
   return {
     riesgo: clientesRiesgo.length,
     recuperados: clientesRecuperados.length,
+    compradoresAnterior,
+    compradoresActual,
+    clientesRetenidos,
     clientesRiesgo,
     clientesRecuperados,
   };
@@ -2370,6 +2387,33 @@ function render() {
   document.getElementById("tiles").innerHTML = tiles.map(item => `<div class="tile ${item.cls || ""}"><div class="label">${item.label}</div><div class="value">${item.value}</div><div class="sub">${item.sub}</div>${item.action || ""}</div>`).join("");
   const riskRows = renderClientesRiesgo(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
   const recoveredRows = renderClientesRecuperados(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
+  const valorRiesgo = riskRows.reduce((sum, row) => sum + (isKg ? row.anteriorKg : row.anteriorImp), 0);
+  const valorRecuperado = recoveredRows.reduce((sum, row) => sum + (isKg ? row.actualKg : row.actualImp), 0);
+  const tasaRetencion = riesgoNuevos.compradoresAnterior
+    ? riesgoNuevos.clientesRetenidos / riesgoNuevos.compradoresAnterior * 100
+    : null;
+  const saldoClientes = riesgoNuevos.recuperados - riesgoNuevos.riesgo;
+  const topStatusGroup = (statusRows, keyFn) => {
+    const grouped = new Map();
+    statusRows.forEach(row => {
+      const key = keyFn(row);
+      if (!key || key === "-") return;
+      grouped.set(key, (grouped.get(key) || 0) + 1);
+    });
+    return Array.from(grouped.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))[0] || null;
+  };
+  const vendedorRiesgoTop = topStatusGroup(riskRows, row => row.c.v == null ? "-" : `V${row.c.v} - ${row.c.vn || "Sin nombre"}`);
+  const diaRiesgoTop = topStatusGroup(riskRows, row => row.c.d || "Sin ruta");
+  const productosRiesgo = new Map();
+  riskRows.forEach(row => row.porArticulo.forEach((metricas, articleId) => {
+    const valor = isKg ? metricas.kg : metricas.importe;
+    if (valor <= 0) return;
+    let item = productosRiesgo.get(articleId);
+    if (!item) { item = { valor: 0, clientes: new Set() }; productosRiesgo.set(articleId, item); }
+    item.valor += valor;
+    item.clientes.add(row.cid);
+  }));
+  const productoRiesgoTop = Array.from(productosRiesgo.entries()).sort((a, b) => b[1].clientes.size - a[1].clientes.size || b[1].valor - a[1].valor)[0] || null;
 
   // objetivo del mes
   if (mesesInfo) {
@@ -2404,6 +2448,25 @@ function render() {
   if (riesgoNuevos.riesgo > 0) {
     findings.push(`<li><b>Atenci&oacute;n:</b> <b>${riesgoNuevos.riesgo}</b> cliente(s) que compraron en <b>${esc(compareBaseLabel)}</b> no compraron en <b>${esc(compareCurrentLabel)}</b> (con los filtros actuales).</li>`);
   }
+  if (comparisonInfo && tasaRetencion !== null) {
+    findings.push(`<li><b>Retención de clientes:</b> se mantuvo activo el <b>${pct(tasaRetencion)}</b> de quienes compraron en ${esc(compareBaseLabel)} (${riesgoNuevos.clientesRetenidos} de ${riesgoNuevos.compradoresAnterior}); los ${riesgoNuevos.riesgo} restantes están en riesgo.</li>`);
+  }
+  if (comparisonInfo) {
+    findings.push(`<li><b>Valor en riesgo:</b> los clientes todavía ausentes habían aportado <b>${fmtValor(valorRiesgo)}</b> en ${esc(compareBaseLabel)}. Es una referencia para priorizar recuperación, no una venta perdida confirmada.</li>`);
+    findings.push(`<li><b>Valor recuperado:</b> los ${riesgoNuevos.recuperados} clientes reactivados ya aportaron <b>${fmtValor(valorRecuperado)}</b> en ${esc(compareCurrentLabel)}.</li>`);
+    const balanceText = saldoClientes >= 0 ? `saldo favorable de ${saldoClientes}` : `faltan compensar ${Math.abs(saldoClientes)}`;
+    findings.push(`<li><b>Balance de clientes:</b> hubo ${riesgoNuevos.recuperados} recuperados frente a ${riesgoNuevos.riesgo} en riesgo; <b>${balanceText}</b> cliente(s) en el movimiento comercial comparado.</li>`);
+  }
+  if (!v && vendedorRiesgoTop) {
+    findings.push(`<li><b>Vendedor con más riesgo:</b> ${esc(vendedorRiesgoTop[0])} concentra <b>${vendedorRiesgoTop[1]}</b> cliente(s) todavía sin recompra.</li>`);
+  }
+  if (diaRiesgoTop) {
+    findings.push(`<li><b>Día crítico:</b> <b>${esc(diaRiesgoTop[0])}</b> reúne ${diaRiesgoTop[1]} cliente(s) en riesgo; es el recorrido prioritario para seguimiento.</li>`);
+  }
+  if (productoRiesgoTop) {
+    const articulo = ART_BY_ID.get(productoRiesgoTop[0]);
+    findings.push(`<li><b>Producto para recuperar:</b> <b>${esc(articulo ? articulo.n : `Artículo ${productoRiesgoTop[0]}`)}</b> era comprado por ${productoRiesgoTop[1].clientes.size} de los clientes en riesgo y representa ${fmtValor(productoRiesgoTop[1].valor)} de la base.</li>`);
+  }
   // subcanal top
   const scMap = new Map();
   for (const r of rows) {
@@ -2437,6 +2500,23 @@ function render() {
     findings.push(`<li><b>Entre vendedores:</b> ${esc(bestCov.nombre)} tiene la mejor cobertura (${pct(bestCov.cobertura)} de ${bestCov.total} clientes)${worstCov.nombre!==bestCov.nombre ? `, ${esc(worstCov.nombre)} la mas baja (${pct(worstCov.cobertura)} de ${worstCov.total}).` : "."}</li>`);
   }
   document.getElementById("findings").innerHTML = findings.join("\n");
+  const conclusion = document.getElementById("findings-conclusion");
+  if (!comparisonInfo) {
+    conclusion.className = "findings-conclusion warning";
+    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>Falta una base comparable</strong><p>Elegí dos meses distintos para analizar retención, riesgo y recuperación.</p>`;
+  } else {
+    const conclusionTone = riesgoNuevos.riesgo === 0 || saldoClientes >= 0 ? "positive" : (tasaRetencion !== null && tasaRetencion >= 85 ? "warning" : "critical");
+    const headline = riesgoNuevos.riesgo === 0
+      ? "La cartera comparada no presenta clientes en riesgo"
+      : saldoClientes >= 0
+        ? "La recuperación compensa las bajas detectadas"
+        : `${Math.abs(saldoClientes)} cliente(s) en riesgo todavía no fueron compensados`;
+    const action = riesgoNuevos.riesgo === 0
+      ? `Sostener la frecuencia y revisar los ${riesgoNuevos.recuperados} recuperados para consolidar su recompra.`
+      : `Prioridad: contactar primero los clientes del ${diaRiesgoTop ? esc(diaRiesgoTop[0]) : "recorrido con más riesgo"}${productoRiesgoTop ? ` que antes compraban ${esc((ART_BY_ID.get(productoRiesgoTop[0]) || {}).n || "el producto principal")}` : ""}; representan ${fmtValor(valorRiesgo)} de la base.`;
+    conclusion.className = `findings-conclusion ${conclusionTone}`;
+    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>${headline}</strong><p>Retención ${tasaRetencion === null ? "sin base" : pct(tasaRetencion)} · ${riesgoNuevos.riesgo} en riesgo · ${riesgoNuevos.recuperados} recuperados. ${action}</p>`;
+  }
 
   // pareto chart
   document.getElementById("chart-pareto").innerHTML = paretoSVG(compradoresSorted, totalPareto);
