@@ -608,7 +608,8 @@
 
   <div id="analysis-results" style="display:none">
     <div class="card">
-      <h2>Hallazgos</h2>
+      <h2>Hallazgos del mes seleccionado</h2>
+      <p class="lede" id="findings-period" style="margin-bottom:14px"></p>
       <ul class="findings" id="findings"></ul>
       <div class="findings-conclusion" id="findings-conclusion"></div>
     </div>
@@ -1947,6 +1948,19 @@ function computeMesActualAnterior() {
   if (arr.length < 2) return null;
   return { actual: arr[arr.length - 1], anterior: arr[arr.length - 2] };
 }
+function selectedAnalysisComparison() {
+  const disponibles = MESES.map(m => m.key).slice().sort();
+  let mesSeleccionado = "";
+  if (hayRangoFecha()) {
+    mesSeleccionado = (state.fechaHasta || state.fechaDesde || "").slice(0, 7);
+  } else {
+    const seleccionados = Array.from(state.months).sort();
+    mesSeleccionado = seleccionados[seleccionados.length - 1] || "";
+  }
+  const posicion = disponibles.indexOf(mesSeleccionado);
+  if (posicion <= 0) return null;
+  return { actual: mesSeleccionado, anterior: disponibles[posicion - 1] };
+}
 function sumaMesesCliente(clientIdSet, articleScope, mesActual, mesAnterior, vendedor = "") {
   let actualImp = 0, actualKg = 0, anteriorImp = 0, anteriorKg = 0;
   for (const row of VENTAS) {
@@ -2342,8 +2356,10 @@ function render() {
   const comparisonInfo = state.compareBase && state.compareCurrent
     ? { anterior: state.compareBase, actual: state.compareCurrent }
     : mesesInfo;
-  let objEmpresa = null, objCurrent = null, comparativoCurrent = null;
+  const analysisComparisonInfo = selectedAnalysisComparison();
+  let objEmpresa = null, objCurrent = null, comparativoCurrent = null, analysisComparativoCurrent = null;
   let riesgoNuevos = { riesgo: 0, recuperados: 0, clientesRiesgo: [], clientesRecuperados: [] };
+  let analysisRiskData = { riesgo: 0, recuperados: 0, compradoresAnterior: 0, compradoresActual: 0, clientesRetenidos: 0, clientesRiesgo: [], clientesRecuperados: [] };
   const todosClientesVisibles = new Set(CLIENTES.map(c => c.id));
   const clientesObjetivoVendedor = v && !hayFiltroSegmentoCliente ? null : salesClienteIdSet;
   if (mesesInfo) {
@@ -2353,6 +2369,10 @@ function render() {
   if (comparisonInfo) {
     comparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, comparisonInfo.actual, comparisonInfo.anterior, v);
     riesgoNuevos = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, comparisonInfo.actual, comparisonInfo.anterior, v);
+  }
+  if (analysisComparisonInfo) {
+    analysisComparativoCurrent = sumaMesComparable(clientesObjetivoVendedor, articleScope, analysisComparisonInfo.actual, analysisComparisonInfo.anterior, v);
+    analysisRiskData = clientesEnRiesgoYNuevos(filteredClienteIdSet, articleScope, analysisComparisonInfo.actual, analysisComparisonInfo.anterior, v);
   }
 
   // tiles
@@ -2387,12 +2407,22 @@ function render() {
   document.getElementById("tiles").innerHTML = tiles.map(item => `<div class="tile ${item.cls || ""}"><div class="label">${item.label}</div><div class="value">${item.value}</div><div class="sub">${item.sub}</div>${item.action || ""}</div>`).join("");
   const riskRows = renderClientesRiesgo(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
   const recoveredRows = renderClientesRecuperados(riesgoNuevos, comparisonInfo, isKg, mesLabelByKey);
-  const valorRiesgo = riskRows.reduce((sum, row) => sum + (isKg ? row.anteriorKg : row.anteriorImp), 0);
-  const valorRecuperado = recoveredRows.reduce((sum, row) => sum + (isKg ? row.actualKg : row.actualImp), 0);
-  const tasaRetencion = riesgoNuevos.compradoresAnterior
-    ? riesgoNuevos.clientesRetenidos / riesgoNuevos.compradoresAnterior * 100
+  const analysisRiskRows = analysisRiskData.clientesRiesgo.map(row => {
+    const c = CLI_BY_ID.get(row.cid);
+    return c ? { c, ...row } : null;
+  }).filter(Boolean);
+  const analysisRecoveredRows = analysisRiskData.clientesRecuperados.map(row => {
+    const c = CLI_BY_ID.get(row.cid);
+    return c ? { c, ...row } : null;
+  }).filter(Boolean);
+  const valorRiesgo = analysisRiskRows.reduce((sum, row) => sum + (isKg ? row.anteriorKg : row.anteriorImp), 0);
+  const valorRecuperado = analysisRecoveredRows.reduce((sum, row) => sum + (isKg ? row.actualKg : row.actualImp), 0);
+  const tasaRetencion = analysisRiskData.compradoresAnterior
+    ? analysisRiskData.clientesRetenidos / analysisRiskData.compradoresAnterior * 100
     : null;
-  const saldoClientes = riesgoNuevos.recuperados - riesgoNuevos.riesgo;
+  const saldoClientes = analysisRiskData.recuperados - analysisRiskData.riesgo;
+  const analysisBaseLabel = analysisComparisonInfo ? (mesLabelByKey.get(analysisComparisonInfo.anterior) || analysisComparisonInfo.anterior) : "mes anterior";
+  const analysisCurrentLabel = analysisComparisonInfo ? (mesLabelByKey.get(analysisComparisonInfo.actual) || analysisComparisonInfo.actual) : "mes seleccionado";
   const topStatusGroup = (statusRows, keyFn) => {
     const grouped = new Map();
     statusRows.forEach(row => {
@@ -2402,10 +2432,10 @@ function render() {
     });
     return Array.from(grouped.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))[0] || null;
   };
-  const vendedorRiesgoTop = topStatusGroup(riskRows, row => row.c.v == null ? "-" : `V${row.c.v} - ${row.c.vn || "Sin nombre"}`);
-  const diaRiesgoTop = topStatusGroup(riskRows, row => row.c.d || "Sin ruta");
+  const vendedorRiesgoTop = topStatusGroup(analysisRiskRows, row => row.c.v == null ? "-" : `V${row.c.v} - ${row.c.vn || "Sin nombre"}`);
+  const diaRiesgoTop = topStatusGroup(analysisRiskRows, row => row.c.d || "Sin ruta");
   const productosRiesgo = new Map();
-  riskRows.forEach(row => row.porArticulo.forEach((metricas, articleId) => {
+  analysisRiskRows.forEach(row => row.porArticulo.forEach((metricas, articleId) => {
     const valor = isKg ? metricas.kg : metricas.importe;
     if (valor <= 0) return;
     let item = productosRiesgo.get(articleId);
@@ -2431,31 +2461,34 @@ function render() {
 
   // hallazgos
   const findings = [];
+  const findingsPeriod = document.getElementById("findings-period");
+  findingsPeriod.innerHTML = analysisComparisonInfo
+    ? `<b>${esc(analysisCurrentLabel)}</b> comparado con <b>${esc(analysisBaseLabel)}</b>. La cobertura, concentraci&oacute;n y rankings respetan todo el per&iacute;odo y los filtros seleccionados.`
+    : `El per&iacute;odo seleccionado no tiene un mes anterior disponible para calcular tendencia, riesgo y recuperaci&oacute;n. Los dem&aacute;s hallazgos s&iacute; respetan los filtros actuales.`;
   findings.push(`<li><b>${pct(cobertura)} de cobertura</b> sobre los ${totalClientes.toLocaleString("es-AR")} clientes de la seleccion actual (${compradores.length} compran) &mdash; sobre los que tienen ruta de vendedor asignada, la cobertura es <b>${pct(coberturaRuta)}</b>.</li>`);
   if (total > 0) {
     findings.push(`<li><b>Concentracion:</b> los 10 clientes mas grandes explican el <b>${pct(top10Pct)}</b> de ${labelMagnitud().toLowerCase()} filtrado(a); hacen falta <b>${pareto80n}</b> de los ${metricCompradores.length} compradores para llegar al 80%.</li>`);
   }
-  if (mesesInfo && objCurrent) {
-    const valAct = isKg ? objCurrent.actualKg : objCurrent.actualImp;
-    const valAnt = isKg ? objCurrent.anteriorKg : objCurrent.anteriorImp;
+  if (analysisComparisonInfo && analysisComparativoCurrent) {
+    const valAct = isKg ? analysisComparativoCurrent.actualKg : analysisComparativoCurrent.actualImp;
+    const valAnt = isKg ? analysisComparativoCurrent.anteriorKg : analysisComparativoCurrent.anteriorImp;
     if (valAnt > 0) {
       const delta = (valAct - valAnt) / valAnt * 100;
       const dir = delta >= 0 ? "arriba" : "abajo";
-      const mesAntLabel = mesLabelByKey.get(mesesInfo.anterior) || mesesInfo.anterior;
-      findings.push(`<li><b>Tendencia:</b> che, ven&iacute;s <b>${pct(Math.abs(delta))} ${dir}</b> en ${labelMagnitud().toLowerCase()} respecto a ${esc(mesAntLabel)} (con los filtros actuales) &mdash; ${fmtValor(valAct)} vs ${fmtValor(valAnt)}.</li>`);
+      findings.push(`<li><b>Tendencia:</b> che, ven&iacute;s <b>${pct(Math.abs(delta))} ${dir}</b> en ${labelMagnitud().toLowerCase()} en ${esc(analysisCurrentLabel)} respecto a ${esc(analysisBaseLabel)} (con los filtros actuales) &mdash; ${fmtValor(valAct)} vs ${fmtValor(valAnt)}.</li>`);
     }
   }
-  if (riesgoNuevos.riesgo > 0) {
-    findings.push(`<li><b>Atenci&oacute;n:</b> <b>${riesgoNuevos.riesgo}</b> cliente(s) que compraron en <b>${esc(compareBaseLabel)}</b> no compraron en <b>${esc(compareCurrentLabel)}</b> (con los filtros actuales).</li>`);
+  if (analysisRiskData.riesgo > 0) {
+    findings.push(`<li><b>Atenci&oacute;n:</b> <b>${analysisRiskData.riesgo}</b> cliente(s) que compraron en <b>${esc(analysisBaseLabel)}</b> no compraron en <b>${esc(analysisCurrentLabel)}</b> (con los filtros actuales).</li>`);
   }
-  if (comparisonInfo && tasaRetencion !== null) {
-    findings.push(`<li><b>Retención de clientes:</b> se mantuvo activo el <b>${pct(tasaRetencion)}</b> de quienes compraron en ${esc(compareBaseLabel)} (${riesgoNuevos.clientesRetenidos} de ${riesgoNuevos.compradoresAnterior}); los ${riesgoNuevos.riesgo} restantes están en riesgo.</li>`);
+  if (analysisComparisonInfo && tasaRetencion !== null) {
+    findings.push(`<li><b>Retención de clientes:</b> se mantuvo activo el <b>${pct(tasaRetencion)}</b> de quienes compraron en ${esc(analysisBaseLabel)} (${analysisRiskData.clientesRetenidos} de ${analysisRiskData.compradoresAnterior}); los ${analysisRiskData.riesgo} restantes están en riesgo.</li>`);
   }
-  if (comparisonInfo) {
-    findings.push(`<li><b>Valor en riesgo:</b> los clientes todavía ausentes habían aportado <b>${fmtValor(valorRiesgo)}</b> en ${esc(compareBaseLabel)}. Es una referencia para priorizar recuperación, no una venta perdida confirmada.</li>`);
-    findings.push(`<li><b>Valor recuperado:</b> los ${riesgoNuevos.recuperados} clientes reactivados ya aportaron <b>${fmtValor(valorRecuperado)}</b> en ${esc(compareCurrentLabel)}.</li>`);
+  if (analysisComparisonInfo) {
+    findings.push(`<li><b>Valor en riesgo:</b> los clientes todavía ausentes habían aportado <b>${fmtValor(valorRiesgo)}</b> en ${esc(analysisBaseLabel)}. Es una referencia para priorizar recuperación, no una venta perdida confirmada.</li>`);
+    findings.push(`<li><b>Valor recuperado:</b> los ${analysisRiskData.recuperados} clientes reactivados ya aportaron <b>${fmtValor(valorRecuperado)}</b> en ${esc(analysisCurrentLabel)}.</li>`);
     const balanceText = saldoClientes >= 0 ? `saldo favorable de ${saldoClientes}` : `faltan compensar ${Math.abs(saldoClientes)}`;
-    findings.push(`<li><b>Balance de clientes:</b> hubo ${riesgoNuevos.recuperados} recuperados frente a ${riesgoNuevos.riesgo} en riesgo; <b>${balanceText}</b> cliente(s) en el movimiento comercial comparado.</li>`);
+    findings.push(`<li><b>Balance de clientes:</b> hubo ${analysisRiskData.recuperados} recuperados frente a ${analysisRiskData.riesgo} en riesgo; <b>${balanceText}</b> cliente(s) en el movimiento comercial comparado.</li>`);
   }
   if (!v && vendedorRiesgoTop) {
     findings.push(`<li><b>Vendedor con más riesgo:</b> ${esc(vendedorRiesgoTop[0])} concentra <b>${vendedorRiesgoTop[1]}</b> cliente(s) todavía sin recompra.</li>`);
@@ -2501,21 +2534,21 @@ function render() {
   }
   document.getElementById("findings").innerHTML = findings.join("\n");
   const conclusion = document.getElementById("findings-conclusion");
-  if (!comparisonInfo) {
+  if (!analysisComparisonInfo) {
     conclusion.className = "findings-conclusion warning";
-    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>Falta una base comparable</strong><p>Elegí dos meses distintos para analizar retención, riesgo y recuperación.</p>`;
+    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>Falta un mes anterior disponible</strong><p>Elegí un mes posterior al primero cargado para analizar tendencia, retención, riesgo y recuperación.</p>`;
   } else {
-    const conclusionTone = riesgoNuevos.riesgo === 0 || saldoClientes >= 0 ? "positive" : (tasaRetencion !== null && tasaRetencion >= 85 ? "warning" : "critical");
-    const headline = riesgoNuevos.riesgo === 0
+    const conclusionTone = analysisRiskData.riesgo === 0 || saldoClientes >= 0 ? "positive" : (tasaRetencion !== null && tasaRetencion >= 85 ? "warning" : "critical");
+    const headline = analysisRiskData.riesgo === 0
       ? "La cartera comparada no presenta clientes en riesgo"
       : saldoClientes >= 0
         ? "La recuperación compensa las bajas detectadas"
         : `${Math.abs(saldoClientes)} cliente(s) en riesgo todavía no fueron compensados`;
-    const action = riesgoNuevos.riesgo === 0
-      ? `Sostener la frecuencia y revisar los ${riesgoNuevos.recuperados} recuperados para consolidar su recompra.`
+    const action = analysisRiskData.riesgo === 0
+      ? `Sostener la frecuencia y revisar los ${analysisRiskData.recuperados} recuperados para consolidar su recompra.`
       : `Prioridad: contactar primero los clientes del ${diaRiesgoTop ? esc(diaRiesgoTop[0]) : "recorrido con más riesgo"}${productoRiesgoTop ? ` que antes compraban ${esc((ART_BY_ID.get(productoRiesgoTop[0]) || {}).n || "el producto principal")}` : ""}; representan ${fmtValor(valorRiesgo)} de la base.`;
     conclusion.className = `findings-conclusion ${conclusionTone}`;
-    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>${headline}</strong><p>Retención ${tasaRetencion === null ? "sin base" : pct(tasaRetencion)} · ${riesgoNuevos.riesgo} en riesgo · ${riesgoNuevos.recuperados} recuperados. ${action}</p>`;
+    conclusion.innerHTML = `<span class="conclusion-kicker">Conclusión final</span><strong>${headline}</strong><p>${esc(analysisCurrentLabel)} vs ${esc(analysisBaseLabel)} · Retención ${tasaRetencion === null ? "sin base" : pct(tasaRetencion)} · ${analysisRiskData.riesgo} en riesgo · ${analysisRiskData.recuperados} recuperados. ${action}</p>`;
   }
 
   // pareto chart

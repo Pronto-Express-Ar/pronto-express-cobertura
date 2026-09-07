@@ -33,10 +33,10 @@ class MonthlyTrendTests(unittest.TestCase):
     def test_indicator_uses_selected_comparison_months(self):
         self.assertIn(
             "sumaMesComparable(clientesObjetivoVendedor, articleScope, "
-            "comparisonInfo.actual, comparisonInfo.anterior, v)",
+            "analysisComparisonInfo.actual, analysisComparisonInfo.anterior, v)",
             self.html,
         )
-        self.assertIn("${esc(compareCurrentLabel)} vs ${esc(compareBaseLabel)}", self.html)
+        self.assertIn("${esc(analysisCurrentLabel)} vs ${esc(analysisBaseLabel)}", self.html)
 
 
 if __name__ == "__main__":

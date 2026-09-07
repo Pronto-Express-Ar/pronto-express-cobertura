@@ -33,6 +33,13 @@ class AdvancedFindingsTests(unittest.TestCase):
         self.assertIn("Día crítico", self.html)
         self.assertIn("Producto para recuperar", self.html)
 
+    def test_findings_follow_the_selected_month(self):
+        self.assertIn("function selectedAnalysisComparison", self.html)
+        self.assertIn("analysisComparisonInfo.actual", self.html)
+        self.assertIn("analysisRiskData", self.html)
+        self.assertIn('id="findings-period"', self.html)
+        self.assertNotIn("if (mesesInfo && objCurrent) {\n    const valAct", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
