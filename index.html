@@ -339,6 +339,7 @@
     color: var(--text-primary); white-space: nowrap;
   }
   .btn-print:hover { background: var(--page); }
+  .analysis-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 
   .tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
   .tab-btn {
@@ -401,6 +402,24 @@
     body.print-no-detail .viz-root, body.print-no-detail .viz-root * {
       background: #fff !important; color: #000 !important; box-shadow: none !important;
     }
+
+    body.print-analysis-only .viz-root { background: #fff !important; padding: 0 !important; }
+    body.print-analysis-only .layout { display: block !important; }
+    body.print-analysis-only .sidebar,
+    body.print-analysis-only .tabs,
+    body.print-analysis-only #results,
+    body.print-analysis-only #results-empty,
+    body.print-analysis-only #daily-results,
+    body.print-analysis-only #top3-results,
+    body.print-analysis-only #incentive-results,
+    body.print-analysis-only .analysis-toolbar,
+    body.print-analysis-only .foot-note { display: none !important; }
+    body.print-analysis-only #analysis-results { display: block !important; }
+    body.print-analysis-only #analysis-results .card { break-inside: avoid; box-shadow: none !important; }
+    body.print-analysis-only #analysis-results .chart-svg { max-width: 100% !important; }
+    body.print-analysis-only .print-only { display: block; margin-bottom: 12px; font-size: 12px; color: #333; }
+    body.print-analysis-only .viz-root,
+    body.print-analysis-only .viz-root * { color: #000 !important; box-shadow: none !important; }
   }
 </style>
 </head>
@@ -607,6 +626,10 @@
   </div>
 
   <div id="analysis-results" style="display:none">
+    <div class="analysis-toolbar">
+      <button class="btn-link btn-print" id="print-analysis-btn" type="button">&#128196; Exportar análisis avanzado a PDF</button>
+    </div>
+    <div class="print-only" id="analysis-print-context"></div>
     <div class="card">
       <h2>Hallazgos del mes seleccionado</h2>
       <p class="lede" id="findings-period" style="margin-bottom:14px"></p>
@@ -1323,7 +1346,9 @@ enableStatusClientExpansion("risk-table-body");
 enableStatusClientExpansion("recovered-table-body");
 
 window.addEventListener("afterprint", () => {
-  document.body.classList.remove("print-table-only", "print-no-detail");
+  document.body.classList.remove("print-table-only", "print-no-detail", "print-analysis-only");
+  const analysisPageStyle = document.getElementById("analysis-page-style");
+  if (analysisPageStyle) analysisPageStyle.remove();
 });
 document.getElementById("print-btn").addEventListener("click", () => {
   document.body.classList.add("print-table-only");
@@ -1331,6 +1356,17 @@ document.getElementById("print-btn").addEventListener("click", () => {
 });
 document.getElementById("print-panel-btn").addEventListener("click", () => {
   document.body.classList.add("print-no-detail");
+  window.print();
+});
+document.getElementById("print-analysis-btn").addEventListener("click", () => {
+  document.body.classList.remove("print-table-only", "print-no-detail");
+  document.body.classList.add("print-analysis-only");
+  const previousStyle = document.getElementById("analysis-page-style");
+  if (previousStyle) previousStyle.remove();
+  const pageStyle = document.createElement("style");
+  pageStyle.id = "analysis-page-style";
+  pageStyle.textContent = "@page { size: A4 landscape; margin: 10mm; }";
+  document.head.appendChild(pageStyle);
   window.print();
 });
 
@@ -2615,6 +2651,12 @@ function render() {
     <div><b>Producto(s) analizado(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
     <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
     <div><b>Pronto Express</b> &middot; ${totalClientes} clientes listados &middot; ${compradores.length} compran &middot; ${v ? `${labelMagnitud().toLowerCase()} ERP vendedor` : labelMagnitud().toLowerCase()} ${fmtValor(total)} &middot; generado 08/09/2026</div>
+  `;
+  document.getElementById("analysis-print-context").innerHTML = `
+    <div style="font-size:18px;font-weight:700;margin-bottom:5px">Análisis avanzado &middot; Pronto Express</div>
+    <div><b>Producto(s):</b> ${esc(productNames.join(", "))} &middot; <b>Medido en:</b> ${isKg ? "Kilos" : "Dinero"}</div>
+    <div><b>${periodoTxt}</b>${filtrosTxt ? ` &middot; ${filtrosTxt}` : ""}</div>
+    <div>${analysisComparisonInfo ? `<b>Comparativa de hallazgos:</b> ${esc(analysisCurrentLabel)} vs ${esc(analysisBaseLabel)} &middot; ` : ""}<b>Generado:</b> 08/09/2026</div>
   `;
 
   // resumen + tabla
