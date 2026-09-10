@@ -420,6 +420,29 @@
     body.print-analysis-only .print-only { display: block; margin-bottom: 12px; font-size: 12px; color: #333; }
     body.print-analysis-only .viz-root,
     body.print-analysis-only .viz-root * { color: #000 !important; box-shadow: none !important; }
+
+    body.print-incentive-only .viz-root { background: #fff !important; padding: 0 !important; }
+    body.print-incentive-only .layout { display: block !important; }
+    body.print-incentive-only .sidebar,
+    body.print-incentive-only .tabs,
+    body.print-incentive-only #results,
+    body.print-incentive-only #results-empty,
+    body.print-incentive-only #analysis-results,
+    body.print-incentive-only #daily-results,
+    body.print-incentive-only #top3-results,
+    body.print-incentive-only .incentive-print-toolbar,
+    body.print-incentive-only .incentive-export-button,
+    body.print-incentive-only .foot-note { display: none !important; }
+    body.print-incentive-only #incentive-results { display: block !important; }
+    body.print-incentive-only #incentive-results .card,
+    body.print-incentive-only #incentive-results .incentive-stat,
+    body.print-incentive-only #incentive-results .incentive-seller-card,
+    body.print-incentive-only #incentive-results .incentive-provider,
+    body.print-incentive-only #incentive-results .incentive-metric { break-inside: avoid; box-shadow: none !important; }
+    body.print-incentive-only .incentive-client-table-wrap { max-height: none !important; overflow: visible !important; }
+    body.print-incentive-only .print-only { display: block; margin-bottom: 12px; font-size: 12px; color: #333; }
+    body.print-incentive-only .viz-root,
+    body.print-incentive-only .viz-root * { color: #000 !important; box-shadow: none !important; }
   }
 </style>
 </head>
@@ -737,6 +760,10 @@
   </div>
 
   <div id="incentive-results" style="display:none">
+    <div class="analysis-toolbar incentive-print-toolbar">
+      <button class="btn-link btn-print" id="print-incentive-btn" type="button">&#128196; Exportar objetivos premios a PDF</button>
+    </div>
+    <div class="print-only" id="incentive-print-context"></div>
     <div class="card incentive-intro">
       <div>
         <h2>Objetivos para premios &mdash; Septiembre 2026</h2>
@@ -1342,9 +1369,11 @@ enableStatusClientExpansion("risk-table-body");
 enableStatusClientExpansion("recovered-table-body");
 
 window.addEventListener("afterprint", () => {
-  document.body.classList.remove("print-table-only", "print-no-detail", "print-analysis-only");
+  document.body.classList.remove("print-table-only", "print-no-detail", "print-analysis-only", "print-incentive-only");
   const analysisPageStyle = document.getElementById("analysis-page-style");
   if (analysisPageStyle) analysisPageStyle.remove();
+  const incentivePageStyle = document.getElementById("incentive-page-style");
+  if (incentivePageStyle) incentivePageStyle.remove();
 });
 document.getElementById("print-btn").addEventListener("click", () => {
   document.body.classList.add("print-table-only");
@@ -1363,6 +1392,26 @@ document.getElementById("print-analysis-btn").addEventListener("click", () => {
   pageStyle.id = "analysis-page-style";
   pageStyle.textContent = "@page { size: A4 landscape; margin: 10mm; }";
   document.head.appendChild(pageStyle);
+  window.print();
+});
+document.getElementById("print-incentive-btn").addEventListener("click", () => {
+  document.body.classList.remove("print-table-only", "print-no-detail", "print-analysis-only");
+  document.body.classList.add("print-incentive-only");
+  const activeDays = Array.from(document.querySelectorAll('[data-incentive-day].active')).map(button => button.textContent.trim());
+  const activeZone = document.querySelector('[data-incentive-zone].active');
+  const selectedSellerCard = document.querySelector('.incentive-seller-card.selected .incentive-seller-copy b');
+  document.getElementById("incentive-print-context").innerHTML = `
+    <div style="font-size:18px;font-weight:700;margin-bottom:5px">Objetivos premios &middot; Pronto Express</div>
+    <div><b>Vendedor:</b> ${esc(selectedSellerCard ? selectedSellerCard.textContent.trim() : "Todos")}</div>
+    <div><b>D&iacute;as de ruta:</b> ${esc(activeDays.join(", ") || "Todos")} &middot; <b>Zona:</b> ${esc(activeZone ? activeZone.textContent.trim() : "Todas las zonas")}</div>
+    <div><b>Base:</b> Agosto 2026 &middot; <b>Objetivo:</b> Septiembre 2026 &middot; <b>Generado:</b> __FECHA_GENERADO__</div>
+  `;
+  const previousStyle = document.getElementById("incentive-page-style");
+  if (previousStyle) previousStyle.remove();
+  const incentivePageStyle = document.createElement("style");
+  incentivePageStyle.id = "incentive-page-style";
+  incentivePageStyle.textContent = "@page { size: A4 landscape; margin: 10mm; }";
+  document.head.appendChild(incentivePageStyle);
   window.print();
 });
 
