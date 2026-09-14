@@ -6,9 +6,9 @@
   const KG_GROWTH_TARGET = 10;
   const KG_PARTIAL_FROM = 5;
   const PROVIDERS = [
-    { name: "LA PAULINA", kgPrize: 50000, coverageTarget: 85, coveragePartial: 70, zoneOnly: true },
-    { name: "SODECAR", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false },
-    { name: "ORALI", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false }
+    { name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: true },
+    { name: "SODECAR", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false },
+    { name: "ORALI", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false }
   ];
   const COVERAGE_PRIZE = 25000;
   let selectedSeller = null;
@@ -136,28 +136,52 @@
     const universe = sellerUniverse(seller, provider);
     const universeIds = new Set(universe.map(client => String(client.id)));
     const articleIds = new Set((articlesByGroup.get(group.id) || []).map(article => String(article.id)));
-    const perClient = new Map();
+    const perClientByMonth = new Map([[BASE_MONTH, new Map()], [CURRENT_MONTH, new Map()]]);
     VENTAS.forEach(row => {
       const clientId = String(row[0]);
-      if (monthOf(row) !== CURRENT_MONTH || rowSeller(row) !== String(seller) || !universeIds.has(clientId) || !articleIds.has(String(row[1]))) return;
+      const month = monthOf(row);
+      if ((month !== BASE_MONTH && month !== CURRENT_MONTH) || rowSeller(row) !== String(seller) || !universeIds.has(clientId) || !articleIds.has(String(row[1]))) return;
+      const perClient = perClientByMonth.get(month);
       const current = perClient.get(clientId) || { kg: 0, amount: 0 };
       current.kg += rowKg(row);
       current.amount += rowAmount(row);
       perClient.set(clientId, current);
     });
+    const bought = (month, clientId) => {
+      const value = perClientByMonth.get(month).get(clientId) || { kg: 0, amount: 0 };
+      return value.kg > 0 || value.amount > 0;
+    };
     const clients = universe.map(client => {
-      const value = perClient.get(String(client.id)) || { kg: 0, amount: 0 };
+      const value = perClientByMonth.get(CURRENT_MONTH).get(String(client.id)) || { kg: 0, amount: 0 };
       return { client, bought: value.kg > 0 || value.amount > 0, kg: value.kg, amount: value.amount };
     });
     const buyers = clients.filter(value => value.bought).length;
+    const baseBuyers = universe.filter(client => bought(BASE_MONTH, String(client.id))).length;
     const percentage = universe.length ? buyers * 100 / universe.length : 0;
-    const ratio = payoutRatio(percentage, provider.coveragePartial, provider.coverageTarget);
+    const basePercentage = universe.length ? baseBuyers * 100 / universe.length : 0;
+    const partialIncrementClients = provider.coverageMode === "points"
+      ? Math.ceil(universe.length * provider.coveragePartial / 100)
+      : provider.coveragePartial;
+    const targetIncrementClients = provider.coverageMode === "points"
+      ? Math.ceil(universe.length * provider.coverageTarget / 100)
+      : provider.coverageTarget;
+    const partialTargetClients = Math.min(universe.length, baseBuyers + partialIncrementClients);
+    const targetClients = Math.min(universe.length, baseBuyers + targetIncrementClients);
+    const ratio = payoutRatio(buyers, partialTargetClients, targetClients);
     return {
       universe: universe.length,
+      baseBuyers,
       buyers,
+      basePercentage,
       percentage,
-      targetClients: Math.ceil(universe.length * provider.coverageTarget / 100),
-      missingClients: Math.max(0, Math.ceil(universe.length * provider.coverageTarget / 100) - buyers),
+      gainClients: buyers - baseBuyers,
+      gainPoints: percentage - basePercentage,
+      partialIncrementClients,
+      targetIncrementClients,
+      partialTargetClients,
+      targetClients,
+      missingPartialClients: Math.max(0, partialTargetClients - buyers),
+      missingClients: Math.max(0, targetClients - buyers),
       ratio,
       payout: COVERAGE_PRIZE * ratio,
       clients
@@ -247,12 +271,16 @@
 
   function coverageMetric(result, provider, seller) {
     const status = statusFor(result.ratio);
-    const progress = provider.coverageTarget ? clamp(result.percentage / provider.coverageTarget * 100, 0, 100) : 0;
-    const partialMarker = provider.coveragePartial / provider.coverageTarget * 100;
+    const fullSpan = Math.max(1, result.targetClients - result.baseBuyers);
+    const progress = clamp((result.buyers - result.baseBuyers) / fullSpan * 100, 0, 100);
+    const partialMarker = clamp((result.partialTargetClients - result.baseBuyers) / fullSpan * 100, 0, 100);
+    const partialRule = provider.coverageMode === "points" ? `+${provider.coveragePartial} puntos de cobertura` : `+${provider.coveragePartial} clientes`;
+    const fullRule = provider.coverageMode === "points" ? `+${provider.coverageTarget} puntos` : `+${provider.coverageTarget} clientes`;
+    const gainText = `${result.gainClients >= 0 ? "+" : ""}${result.gainClients} clientes`;
     return `<div class="incentive-metric">
-      <div class="incentive-metric-head"><div class="incentive-metric-title"><b>${esc(result.group.label)}</b><small>Premio máximo ${money(COVERAGE_PRIZE)} · parcial desde ${pct(provider.coveragePartial)}</small></div><span class="incentive-status ${status.key}">${status.label}</span></div>
+      <div class="incentive-metric-head"><div class="incentive-metric-title"><b>${esc(result.group.label)}</b><small>Premio máximo ${money(COVERAGE_PRIZE)} · 50% con ${partialRule} · 100% con ${fullRule}</small></div><span class="incentive-status ${status.key}">${status.label}</span></div>
       <div class="incentive-track"><div class="incentive-fill ${status.key}" style="--progress:${progress}"></div><span class="incentive-marker" style="--marker:${partialMarker}" title="Desde aquí comienza el premio parcial"></span></div>
-      <div class="incentive-metric-foot"><span>Cobertura <strong>${pct(result.percentage)}</strong> · ${result.buyers} de ${result.universe} clientes</span><span>Meta ${pct(provider.coverageTarget)} = <strong>${result.targetClients} clientes</strong> · ${result.missingClients ? `Faltan <strong>${result.missingClients}</strong>` : "Objetivo alcanzado"} · Premio estimado <strong>${money(result.payout)}</strong></span></div>
+      <div class="incentive-metric-foot"><span>Agosto <strong>${result.baseBuyers}</strong> · Septiembre <strong>${result.buyers}</strong> · Diferencia <strong>${gainText}</strong> · cobertura actual <strong>${pct(result.percentage)}</strong></span><span>50%: <strong>${result.partialTargetClients} clientes</strong>${result.missingPartialClients ? ` (faltan ${result.missingPartialClients})` : " (alcanzado)"} · 100%: <strong>${result.targetClients}</strong>${result.missingClients ? ` (faltan ${result.missingClients})` : " (alcanzado)"} · Premio estimado <strong>${money(result.payout)}</strong></span></div>
       ${productList(result.group)}
       ${clientList(result, seller, provider)}
     </div>`;
@@ -271,7 +299,7 @@
     return `<div class="incentive-detail-card">
       <div class="incentive-detail-head"><div><h2>V${esc(result.seller)} · ${esc(sellerName)}</h2><p>${result.completed} de ${result.goalCount} objetivos completos al día de hoy</p></div><div class="incentive-award"><small>Premio estimado</small><strong>${money(result.payout)}</strong><small>de ${money(result.maximum)} posibles</small></div></div>
       ${providerHtml}
-      <div class="incentive-note"><b>Criterio del incentivo:</b> las ventas se asignan por vendedor del comprobante en Chess. La cobertura usa los clientes activos que ese vendedor tiene hoy en sus rutas. Las variantes normales y <b>*OFERTA*</b> se consolidan en la misma familia. Los importes son una estimación según la escala acordada. La comisión de cobranza del 0,5% neto sin IVA no se calcula aquí porque requiere datos de cobranzas, no de ventas.</div>
+      <div class="incentive-note"><b>Criterio del incentivo:</b> las ventas se asignan por vendedor del comprobante en Chess. La cobertura usa los clientes activos que ese vendedor tiene hoy en sus rutas. La Paulina compara contra la cobertura de agosto (+15 puntos para el premio parcial y +25 para el completo). Sodecar y Orali toman como piso los compradores de agosto (+10 clientes para el parcial y +15 para el completo), sin mínimo de kilos por cliente. Las variantes normales y <b>*OFERTA*</b> se consolidan en la misma familia. Los importes son una estimación según la escala acordada. La comisión de cobranza del 0,5% neto sin IVA no se calcula aquí porque requiere datos de cobranzas, no de ventas.</div>
     </div>`;
   }
 

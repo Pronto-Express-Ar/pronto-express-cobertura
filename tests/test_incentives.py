@@ -56,16 +56,27 @@ class IncentiveDashboardTests(unittest.TestCase):
     def test_provider_coverage_rules(self):
         self.assertRegex(
             self.js,
-            r'name: "LA PAULINA", kgPrize: 50000, coverageTarget: 85, coveragePartial: 70, zoneOnly: true',
+            r'name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: true',
         )
         self.assertRegex(
             self.js,
-            r'name: "SODECAR", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
+            r'name: "SODECAR", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false',
         )
         self.assertRegex(
             self.js,
-            r'name: "ORALI", kgPrize: 0, coverageTarget: 50, coveragePartial: 30, zoneOnly: false',
+            r'name: "ORALI", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false',
         )
+
+    def test_coverage_targets_are_based_on_august_buyers(self):
+        self.assertIn("baseBuyers", self.js)
+        self.assertIn("[[BASE_MONTH, new Map()], [CURRENT_MONTH, new Map()]]", self.js)
+        self.assertIn("provider.coverageMode === \"points\"", self.js)
+        self.assertIn("baseBuyers + partialIncrementClients", self.js)
+        self.assertIn("baseBuyers + targetIncrementClients", self.js)
+
+    def test_sodecar_and_orali_have_no_minimum_kg_per_client(self):
+        self.assertNotIn("minimumKg", self.js)
+        self.assertNotIn("minKg", self.js)
 
     def test_kg_goal_is_rendered_only_for_providers_with_a_prize(self):
         self.assertIn(
@@ -91,7 +102,7 @@ class IncentiveDashboardTests(unittest.TestCase):
     def test_coverage_uses_active_route_portfolio_and_current_sales(self):
         self.assertIn('String(client.v) === String(seller)', self.js)
         self.assertIn('client.z === "Zona Paulina"', self.js)
-        self.assertIn('monthOf(row) !== CURRENT_MONTH', self.js)
+        self.assertIn('month !== BASE_MONTH && month !== CURRENT_MONTH', self.js)
         self.assertIn('rowSeller(row) !== String(seller)', self.js)
 
     def test_partial_payout_starts_at_half(self):
