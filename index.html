@@ -350,6 +350,19 @@
   .tab-btn:hover { color: var(--text-primary); }
   .tab-btn.active { color: var(--series-1); border-bottom-color: var(--series-1); }
 
+  .loyalty-toolbar { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .loyalty-toolbar label { display:flex; flex-direction:column; gap:5px; color:var(--text-muted); font-size:12px; }
+  .loyalty-toolbar select { min-width:210px; }
+  .loyalty-status { display:inline-flex; border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .loyalty-status.loyal { color:#0b7a35; background:rgba(22,163,74,.14); }
+  .loyalty-status.frequent { color:#1769aa; background:rgba(47,137,218,.14); }
+  .loyalty-status.recurrent { color:#8a5a00; background:rgba(217,154,31,.16); }
+  .loyalty-bar-row { display:grid; grid-template-columns:minmax(150px,1.4fr) 3fr auto; gap:12px; align-items:center; margin:10px 0; }
+  .loyalty-bar-track { height:12px; background:var(--surface-2); border-radius:999px; overflow:hidden; }
+  .loyalty-bar-fill { height:100%; background:var(--series-1); border-radius:999px; }
+  #loyalty-results .table-scroll { max-height:780px; }
+  @media (max-width:700px) { .loyalty-bar-row { grid-template-columns:1fr; gap:5px; } }
+
   .obj-block + .obj-block { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gridline); }
   .obj-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
   .obj-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -562,6 +575,7 @@
     <button class="tab-btn" id="tab-analysis" type="button">An&aacute;lisis avanzado</button>
     <button class="tab-btn" id="tab-daily" type="button">An&aacute;lisis diario</button>
     <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
+    <button class="tab-btn" id="tab-loyalty" type="button">Fidelizaci&oacute;n</button>
     <button class="tab-btn" id="tab-incentives" type="button">Objetivos premios</button>
   </div>
 
@@ -756,6 +770,45 @@
       <h2>Comparativa &mdash; LA PAULINA vs SODECAR vs ORALI</h2>
       <p class="lede" style="margin-bottom:14px">Mismos filtros de vendedor/zona/dia/subcanal/mes que la vista general, pero sin importar el producto o proveedor tildado a la izquierda: compara siempre estos 3 proveedores entre si.</p>
       <div id="top3-table"></div>
+    </div>
+  </div>
+
+  <div id="loyalty-results" style="display:none">
+    <div class="card">
+      <h2>Fidelizaci&oacute;n de clientes &mdash; Julio, Agosto y Septiembre 2026</h2>
+      <p class="lede">Se considera compra cada factura distinta de Chess, sin duplicar sus l&iacute;neas. Un cliente es <b>Fiel 3/3</b> cuando registra al menos dos compras en cada uno de los tres meses. Septiembre est&aacute; en curso.</p>
+    </div>
+    <div class="tiles" id="loyalty-tiles"></div>
+    <div class="card">
+      <h2>Fidelidad por vendedor</h2>
+      <p class="lede" style="margin-bottom:14px">Cantidad de clientes Fieles 3/3 dentro de la cartera filtrada de cada vendedor.</p>
+      <div id="loyalty-by-seller"></div>
+    </div>
+    <div class="card">
+      <div class="loyalty-toolbar">
+        <div>
+          <h2 style="margin-bottom:4px">Detalle de clientes recurrentes</h2>
+          <p class="lede" style="margin:0">Los filtros de vendedor, d&iacute;a de ruta, zona, subcanal y buscador de cliente se aplican a esta lista.</p>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap">
+          <label>Nivel de fidelidad
+            <select id="loyalty-level">
+              <option value="3" selected>Fieles 3/3</option>
+              <option value="2">Frecuentes 2/3</option>
+              <option value="1">Recurrentes 1/3</option>
+              <option value="all">Todos con recurrencia</option>
+            </select>
+          </label>
+          <button class="btn-link btn-print" id="export-loyalty-btn" type="button">&#128190; Exportar a Excel</button>
+        </div>
+      </div>
+      <div class="summary-row" id="loyalty-summary"></div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>C&oacute;digo</th><th>Cliente</th><th>Vendedor</th><th>D&iacute;a ruta</th><th>Subcanal</th><th>Julio</th><th>Agosto</th><th>Septiembre</th><th>Total</th><th>Nivel</th></tr></thead>
+          <tbody id="loyalty-table-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -1209,6 +1262,7 @@ document.getElementById("tab-general").addEventListener("click", () => switchTab
 document.getElementById("tab-analysis").addEventListener("click", () => switchTab("analysis"));
 document.getElementById("tab-daily").addEventListener("click", () => switchTab("daily"));
 document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
+document.getElementById("tab-loyalty").addEventListener("click", () => switchTab("loyalty"));
 document.getElementById("tab-incentives").addEventListener("click", () => switchTab("incentives"));
 function switchTab(tab) {
   activeTab = tab;
@@ -1216,12 +1270,15 @@ function switchTab(tab) {
   document.getElementById("tab-analysis").classList.toggle("active", tab === "analysis");
   document.getElementById("tab-daily").classList.toggle("active", tab === "daily");
   document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
+  document.getElementById("tab-loyalty").classList.toggle("active", tab === "loyalty");
   document.getElementById("tab-incentives").classList.toggle("active", tab === "incentives");
   document.getElementById("results").style.display = tab === "general" ? "block" : "none";
   document.getElementById("analysis-results").style.display = tab === "analysis" ? "block" : "none";
   document.getElementById("daily-results").style.display = tab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
+  document.getElementById("loyalty-results").style.display = tab === "loyalty" ? "block" : "none";
   document.getElementById("incentive-results").style.display = tab === "incentives" ? "block" : "none";
+  if (tab === "loyalty" && window.renderLoyalty) window.renderLoyalty();
   if (tab === "incentives" && window.renderIncentives) window.renderIncentives();
 }
 document.getElementById("daily-date-select").addEventListener("change", event => {
@@ -2308,6 +2365,8 @@ function render() {
   document.getElementById("analysis-results").style.display = activeTab === "analysis" ? "block" : "none";
   document.getElementById("daily-results").style.display = activeTab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = activeTab === "top3" ? "block" : "none";
+  document.getElementById("loyalty-results").style.display = activeTab === "loyalty" ? "block" : "none";
+  if (activeTab === "loyalty" && window.renderLoyalty) window.renderLoyalty();
 
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
@@ -2756,5 +2815,6 @@ document.getElementById("tiles").addEventListener("click", (event) => {
 render();
 </script>
 <script src="scripts/incentives.js?v=20260916-1"></script>
+<script src="scripts/loyalty.js?v=20260916-1"></script>
 </body>
 </html>
