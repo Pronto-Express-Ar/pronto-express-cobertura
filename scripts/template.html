@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Cobertura de Producto &middot; Pronto Express</title>
 <link rel="stylesheet" href="scripts/incentives.css?v=20260903-2">
+<link rel="stylesheet" href="scripts/paulina-proposal.css?v=20260916-1">
 <style>
   .viz-root {
     color-scheme: light;
@@ -583,6 +584,7 @@
     <button class="tab-btn" id="tab-daily" type="button">An&aacute;lisis diario</button>
     <button class="tab-btn" id="tab-top3" type="button">Top 3 proveedores</button>
     <button class="tab-btn" id="tab-loyalty" type="button">Fidelizaci&oacute;n</button>
+    <button class="tab-btn" id="tab-paulina-proposal" type="button">Propuesta Paulina</button>
     <button class="tab-btn" id="tab-incentives" type="button">Objetivos premios</button>
   </div>
 
@@ -823,6 +825,26 @@
           <tbody id="loyalty-table-body"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <div id="paulina-proposal-results" style="display:none">
+    <div class="card paulina-proposal-hero">
+      <div>
+        <span class="proposal-badge">SIMULACI&Oacute;N COMERCIAL</span>
+        <h2>Propuesta de objetivos tractores &mdash; La Paulina</h2>
+        <p class="lede">Foco exclusivo en Cremoso, Barra Danbo y Ralladitos. La propuesta mide expansi&oacute;n de cobertura por vendedor sobre el mes anterior y no modifica los premios vigentes.</p>
+      </div>
+      <button class="btn-link btn-print" id="export-paulina-proposal" type="button">&#128190; Exportar propuesta a Excel</button>
+    </div>
+    <div class="proposal-rationale" id="paulina-proposal-rationale"></div>
+    <div class="tiles" id="paulina-proposal-tiles"></div>
+    <div class="card">
+      <div class="proposal-section-head">
+        <div><h2>Objetivos personalizados por vendedor</h2><p class="lede">50% del objetivo: +15 puntos de cobertura. 100%: +25 puntos. Se usa la cartera activa de Zona Paulina y el vendedor del comprobante en Chess.</p></div>
+        <div class="proposal-legend"><span class="proposal-dot base"></span>Base anterior <span class="proposal-dot current"></span>Mes actual <span class="proposal-marker-key"></span>Meta parcial</div>
+      </div>
+      <div id="paulina-proposal-sellers"></div>
     </div>
   </div>
 
@@ -1273,6 +1295,7 @@ document.getElementById("tab-analysis").addEventListener("click", () => switchTa
 document.getElementById("tab-daily").addEventListener("click", () => switchTab("daily"));
 document.getElementById("tab-top3").addEventListener("click", () => switchTab("top3"));
 document.getElementById("tab-loyalty").addEventListener("click", () => switchTab("loyalty"));
+document.getElementById("tab-paulina-proposal").addEventListener("click", () => switchTab("paulina-proposal"));
 document.getElementById("tab-incentives").addEventListener("click", () => switchTab("incentives"));
 function switchTab(tab) {
   activeTab = tab;
@@ -1281,14 +1304,17 @@ function switchTab(tab) {
   document.getElementById("tab-daily").classList.toggle("active", tab === "daily");
   document.getElementById("tab-top3").classList.toggle("active", tab === "top3");
   document.getElementById("tab-loyalty").classList.toggle("active", tab === "loyalty");
+  document.getElementById("tab-paulina-proposal").classList.toggle("active", tab === "paulina-proposal");
   document.getElementById("tab-incentives").classList.toggle("active", tab === "incentives");
   document.getElementById("results").style.display = tab === "general" ? "block" : "none";
   document.getElementById("analysis-results").style.display = tab === "analysis" ? "block" : "none";
   document.getElementById("daily-results").style.display = tab === "daily" ? "block" : "none";
   document.getElementById("top3-results").style.display = tab === "top3" ? "block" : "none";
   document.getElementById("loyalty-results").style.display = tab === "loyalty" ? "block" : "none";
+  document.getElementById("paulina-proposal-results").style.display = tab === "paulina-proposal" ? "block" : "none";
   document.getElementById("incentive-results").style.display = tab === "incentives" ? "block" : "none";
   if (tab === "loyalty" && window.renderLoyalty) window.renderLoyalty();
+  if (tab === "paulina-proposal" && window.renderPaulinaProposal) window.renderPaulinaProposal();
   if (tab === "incentives" && window.renderIncentives) window.renderIncentives();
 }
 document.getElementById("daily-date-select").addEventListener("change", event => {
@@ -2377,6 +2403,8 @@ function render() {
   document.getElementById("top3-results").style.display = activeTab === "top3" ? "block" : "none";
   document.getElementById("loyalty-results").style.display = activeTab === "loyalty" ? "block" : "none";
   if (activeTab === "loyalty" && window.renderLoyalty) window.renderLoyalty();
+  document.getElementById("paulina-proposal-results").style.display = activeTab === "paulina-proposal" ? "block" : "none";
+  if (activeTab === "paulina-proposal" && window.renderPaulinaProposal) window.renderPaulinaProposal();
 
   const isKg = state.metric === "kg";
   document.getElementById("th-valor").textContent = isKg ? "Kilos periodo" : "Importe periodo";
@@ -2826,5 +2854,6 @@ render();
 </script>
 <script src="scripts/incentives.js?v=20260916-2"></script>
 <script src="scripts/loyalty.js?v=20260916-2"></script>
+<script src="scripts/paulina-proposal.js?v=20260916-1"></script>
 </body>
 </html>
