@@ -43,8 +43,9 @@
         (n.includes("PATEGRAS") || n.includes("FONTINA") || n.includes("MOZZARELLA"))
     },
     {
-      provider: "SODECAR", id: "so-milan", label: "Milán La Residencia",
-      match: (a, n) => articleProvider(a) === "SODECAR" && n.includes("MILAN") && n.includes("RESIDENCIA")
+      provider: "SODECAR", id: "so-milan", label: "Salames Milán La Residencia",
+      match: (a, n, l) => articleProvider(a) === "SODECAR" && l === "SALAMES & SALAMINES" &&
+        n.includes("MILAN") && n.includes("RESIDENCIA")
     },
     {
       provider: "SODECAR", id: "so-paleta", label: "Paleta La Casona",

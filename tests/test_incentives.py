@@ -94,6 +94,11 @@ class IncentiveDashboardTests(unittest.TestCase):
         found_ids = set(re.findall(r'id: "([a-z-]+)"', self.js))
         self.assertTrue(expected_ids.issubset(found_ids))
 
+    def test_residencia_milan_salames_are_explicitly_grouped(self):
+        self.assertIn('label: "Salames Milán La Residencia"', self.js)
+        self.assertIn('l === "SALAMES & SALAMINES"', self.js)
+        self.assertIn('n.includes("MILAN") && n.includes("RESIDENCIA")', self.js)
+
     def test_offers_are_explicitly_included_and_visible(self):
         self.assertIn('norm(article.n).includes("OFERTA")', self.js)
         self.assertIn('class="incentive-offer">OFERTA', self.js)
