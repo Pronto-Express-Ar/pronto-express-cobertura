@@ -80,6 +80,12 @@
   GROUPS.forEach(group => {
     articlesByGroup.set(group.id, ARTICULOS.filter(article => group.match(article, norm(article.n), norm(article.l))));
   });
+  window.ACTIVE_INCENTIVE_GROUPS = GROUPS.map(group => ({
+    id: group.id,
+    provider: group.provider,
+    label: group.label,
+    articleIds: (articlesByGroup.get(group.id) || []).map(article => String(article.id))
+  }));
 
   const providerArticleIds = new Map(PROVIDERS.map(provider => [
     provider.name,

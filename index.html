@@ -360,6 +360,13 @@
   .loyalty-bar-row { display:grid; grid-template-columns:minmax(150px,1.4fr) 3fr auto; gap:12px; align-items:center; margin:10px 0; }
   .loyalty-bar-track { height:12px; background:var(--surface-2); border-radius:999px; overflow:hidden; }
   .loyalty-bar-fill { height:100%; background:var(--series-1); border-radius:999px; }
+  .loyalty-objective-box { margin-top:14px; padding:14px; border:1px solid var(--gridline); border-radius:10px; background:var(--surface-2); }
+  .loyalty-objective-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .loyalty-objective-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(235px,1fr)); gap:12px 18px; }
+  .loyalty-objective-provider strong { display:block; margin-bottom:6px; color:var(--text-primary); font-size:12px; }
+  .loyalty-objective-provider label { display:flex; align-items:flex-start; gap:7px; margin:5px 0; color:var(--text-primary); font-size:12px; cursor:pointer; }
+  .loyalty-objective-provider input { margin-top:2px; }
+  .loyalty-objective-list { min-width:220px; white-space:normal; line-height:1.35; }
   #loyalty-results .table-scroll { max-height:780px; }
   @media (max-width:700px) { .loyalty-bar-row { grid-template-columns:1fr; gap:5px; } }
 
@@ -777,6 +784,13 @@
     <div class="card">
       <h2>Fidelizaci&oacute;n de clientes &mdash; Julio, Agosto y Septiembre 2026</h2>
       <p class="lede">Se considera compra cada factura distinta de Chess, sin duplicar sus l&iacute;neas. Un cliente es <b>Fiel 3/3</b> cuando registra al menos dos compras en cada uno de los tres meses. Septiembre est&aacute; en curso.</p>
+      <div class="loyalty-objective-box">
+        <div class="loyalty-objective-head">
+          <div><b>Filtrar por objetivos activos</b><div class="lede" style="margin-top:3px">Pod&eacute;s elegir uno o varios. Sin objetivos tildados se muestran todos los clientes.</div></div>
+          <button class="btn-link" id="clear-loyalty-objectives" type="button">Limpiar objetivos</button>
+        </div>
+        <div class="loyalty-objective-grid" id="loyalty-objective-filters"></div>
+      </div>
     </div>
     <div class="tiles" id="loyalty-tiles"></div>
     <div class="card">
@@ -805,7 +819,7 @@
       <div class="summary-row" id="loyalty-summary"></div>
       <div class="table-scroll">
         <table class="data-table">
-          <thead><tr><th>C&oacute;digo</th><th>Cliente</th><th>Vendedor</th><th>D&iacute;a ruta</th><th>Subcanal</th><th>Julio</th><th>Agosto</th><th>Septiembre</th><th>Total</th><th>Nivel</th></tr></thead>
+          <thead><tr><th>C&oacute;digo</th><th>Cliente</th><th>Vendedor</th><th>D&iacute;a ruta</th><th>Subcanal</th><th>Julio</th><th>Agosto</th><th>Septiembre</th><th>Total</th><th>Nivel</th><th>Objetivos comprados</th></tr></thead>
           <tbody id="loyalty-table-body"></tbody>
         </table>
       </div>
@@ -2814,7 +2828,7 @@ document.getElementById("tiles").addEventListener("click", (event) => {
 
 render();
 </script>
-<script src="scripts/incentives.js?v=20260916-1"></script>
-<script src="scripts/loyalty.js?v=20260916-1"></script>
+<script src="scripts/incentives.js?v=20260916-2"></script>
+<script src="scripts/loyalty.js?v=20260916-2"></script>
 </body>
 </html>

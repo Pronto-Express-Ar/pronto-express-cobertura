@@ -17,7 +17,7 @@ class LoyaltyDashboardTests(unittest.TestCase):
             self.assertIn('id="tab-loyalty"', html)
             self.assertIn('id="loyalty-results"', html)
             self.assertIn('switchTab("loyalty")', html)
-            self.assertIn('scripts/loyalty.js?v=20260916-1', html)
+            self.assertIn('scripts/loyalty.js?v=20260916-2', html)
 
     def test_uses_three_requested_months(self):
         self.assertIn('{ key: "2026-07", label: "Julio 2026" }', self.js)
@@ -39,6 +39,19 @@ class LoyaltyDashboardTests(unittest.TestCase):
         self.assertIn('descargarXlsx(xlsxSheetXml(', self.js)
         self.assertIn('clientes_fidelizados_', self.js)
         self.assertIn('{ t: "n", v: row.counts[0] }', self.js)
+
+    def test_active_objectives_can_be_multi_selected(self):
+        incentives = (ROOT / "scripts" / "incentives.js").read_text(encoding="utf-8")
+        self.assertIn("window.ACTIVE_INCENTIVE_GROUPS", incentives)
+        self.assertIn('id="loyalty-objective-filters"', self.template)
+        self.assertIn("selectedObjectives = new Set()", self.js)
+        self.assertIn("selectedObjectives.has(group.id)", self.js)
+        self.assertIn("Objetivos comprados", self.template)
+
+    def test_objective_filter_tracks_purchase_months_and_exports_them(self):
+        self.assertIn("objectiveMonthsByClient", self.js)
+        self.assertIn("monthShort", self.js)
+        self.assertIn('"Objetivos comprados"', self.js)
 
 
 if __name__ == "__main__":
