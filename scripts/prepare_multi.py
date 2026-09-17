@@ -113,6 +113,15 @@ def nombre_cliente(cli):
     return f"Cliente {cli.get('idCliente')}"
 
 
+def direccion_cliente(cli):
+    """Arma el domicilio comercial de Chess sin mezclarlo con el de entrega."""
+    calle = str(cli.get("calle") or "").strip()
+    altura = str(cli.get("altura") or "").strip()
+    if altura in {"0", "0.0"}:
+        altura = ""
+    return " ".join(parte for parte in (calle, altura) if parte)
+
+
 def ruta_actual(cli):
     activos = [e for e in cli.get("eClifuerza", []) if not e.get("anulado") and e.get("fechaFinFuerza") == "9999-12-31"]
     if not activos:
@@ -140,6 +149,7 @@ for cli in clientes_raw:
     clientes_out[idc] = {
         "id": idc,
         "n": nombre_cliente(cli),
+        "dir": direccion_cliente(cli),
         "loc": cli.get("desLocalidad") or "",
         "sc": (cli.get("desSubcanalMkt") or "SIN SUBCANAL").strip() or "SIN SUBCANAL",
         "v": info["vendedorNum"] if info and info["esDiaSemana"] else None,

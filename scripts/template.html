@@ -660,7 +660,7 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Codigo</th><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
+              <th>Codigo</th><th>Cliente</th><th>Direcci&oacute;n</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Dia ruta</th>
               <th>Subcanal MKT</th><th>Compra</th><th id="th-valor">Importe periodo</th><th>Ultima compra</th>
             </tr>
           </thead>
@@ -804,7 +804,7 @@
       <div class="loyalty-toolbar">
         <div>
           <h2 style="margin-bottom:4px">Detalle de clientes recurrentes</h2>
-          <p class="lede" style="margin:0">Los filtros de vendedor, d&iacute;a de ruta, zona, subcanal y buscador de cliente se aplican a esta lista.</p>
+          <p class="lede" style="margin:0">Los filtros de vendedor, d&iacute;a de ruta, zona, subcanal y buscador de cliente se aplican a esta lista. El subcanal PERSONAL queda excluido.</p>
         </div>
         <div style="display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap">
           <label>Nivel de fidelidad
@@ -1724,13 +1724,14 @@ document.getElementById("export-btn").addEventListener("click", () => {
     [periodoTxt, ...filtrosParts].join(" | "),
     `Pronto Express - generado __FECHA_GENERADO__`,
   ];
-  const headers = ["Codigo", "Cliente", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"];
+  const headers = ["Codigo", "Cliente", "Direccion", "Localidad", "Zona", "Vendedor", "Dia ruta", "Subcanal MKT", "Compra", isKg ? "Kilos periodo" : "Importe periodo", "Ultima compra"];
   const dataRows = rows.map(r => {
     const c = r.c;
     const valorNum = r.compro ? Math.round(r.valor * 100) / 100 : 0;
     return [
       { t: "n", v: c.id },
       { t: "s", v: c.n },
+      { t: "s", v: c.dir || "" },
       { t: "s", v: c.loc },
       { t: "s", v: c.z || "" },
       { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
@@ -1881,10 +1882,11 @@ document.getElementById("export-client-products-btn").addEventListener("click", 
     `${rows.length} clientes del listado | ${detailRows.filter(x => x.product).length} combinaciones cliente-producto`,
     `Pronto Express - generado __FECHA_GENERADO__`,
   ];
-  const headers = ["Codigo cliente", "Cliente", "Localidad", "Vendedor", "Dia ruta", "Subcanal MKT", "Estado", "Codigo producto", "Producto", "Linea", "Proveedor", "Importe neto", "Kilos netos", "Ultima compra"];
+  const headers = ["Codigo cliente", "Cliente", "Direccion", "Localidad", "Vendedor", "Dia ruta", "Subcanal MKT", "Estado", "Codigo producto", "Producto", "Linea", "Proveedor", "Importe neto", "Kilos netos", "Ultima compra"];
   const dataRows = detailRows.map(({ c, estado, product }) => [
     { t: "n", v: c.id },
     { t: "s", v: c.n },
+    { t: "s", v: c.dir || "" },
     { t: "s", v: c.loc },
     { t: "s", v: c.vn ? `V${c.v} - ${c.vn}` : "" },
     { t: "s", v: c.d },
@@ -2821,6 +2823,7 @@ function render() {
     return `<tr class="client-row" data-cid="${c.id}" title="Ver que productos compra">
       <td>${c.id}</td>
       <td class="name-cell">${esc(c.n)}</td>
+      <td>${esc(c.dir || "-")}</td>
       <td>${esc(c.loc)}</td>
       <td class="zone-tag">${c.z ? esc(c.z) : "-"}</td>
       <td>${c.vn ? `V${c.v} - ${esc(c.vn)}` : "-"}</td>
@@ -2853,7 +2856,7 @@ document.getElementById("tiles").addEventListener("click", (event) => {
 render();
 </script>
 <script src="scripts/incentives.js?v=20260916-2"></script>
-<script src="scripts/loyalty.js?v=20260916-2"></script>
+<script src="scripts/loyalty.js?v=20260917-1"></script>
 <script src="scripts/paulina-proposal.js?v=20260916-1"></script>
 </body>
 </html>

@@ -90,7 +90,7 @@
   }
 
   function allRows() {
-    return CLIENTES.filter(matchesSidebar).map(client => {
+    return CLIENTES.filter(client => !String(client.sc || "").trim().toUpperCase().includes("PERSONAL")).filter(matchesSidebar).map(client => {
       const counts = MONTHS.map(month => invoiceCount(client.id, month.key));
       const qualifyingMonths = counts.filter(count => count >= 2).length;
       const total = counts.reduce((sum, count) => sum + count, 0);
@@ -188,6 +188,7 @@
       `Nivel exportado: ${levelLabel}`,
       `Filtros: Vendedor ${vSel.selectedOptions[0]?.textContent || "Todos"} | Dia ${dSel.selectedOptions[0]?.textContent || "Todos"} | Zona ${zSel.selectedOptions[0]?.textContent || "Todas"}`,
       `Objetivos activos: ${objectiveGroups.filter(group => selectedObjectives.has(group.id)).map(group => group.label).join(", ") || "Todos"}`,
+      "Subcanal excluido: PERSONAL.",
       "Criterio: cada compra es una factura distinta; recurrencia = 2 o mas facturas en el mes."
     ];
     const headers = ["Codigo", "Cliente", "Vendedor", "Dia ruta", "Subcanal", "Facturas Julio", "Facturas Agosto", "Facturas Septiembre", "Facturas total", "Nivel", "Objetivos comprados"];

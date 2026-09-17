@@ -17,7 +17,7 @@ class LoyaltyDashboardTests(unittest.TestCase):
             self.assertIn('id="tab-loyalty"', html)
             self.assertIn('id="loyalty-results"', html)
             self.assertIn('switchTab("loyalty")', html)
-            self.assertIn('scripts/loyalty.js?v=20260916-2', html)
+            self.assertIn('scripts/loyalty.js?v=20260917-1', html)
 
     def test_uses_three_requested_months(self):
         self.assertIn('{ key: "2026-07", label: "Julio 2026" }', self.js)
@@ -52,6 +52,11 @@ class LoyaltyDashboardTests(unittest.TestCase):
         self.assertIn("objectiveMonthsByClient", self.js)
         self.assertIn("monthShort", self.js)
         self.assertIn('"Objetivos comprados"', self.js)
+
+    def test_personal_subchannel_is_excluded(self):
+        self.assertIn('.includes("PERSONAL")', self.js)
+        self.assertIn("Subcanal excluido: PERSONAL", self.js)
+        self.assertIn("El subcanal PERSONAL queda excluido", self.template)
 
 
 if __name__ == "__main__":

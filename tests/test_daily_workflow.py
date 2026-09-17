@@ -35,6 +35,14 @@ class DailyWorkflowTests(unittest.TestCase):
         self.assertEqual("pronto-panel-daily-update", concurrency["group"])
         self.assertFalse(concurrency["cancel-in-progress"])
 
+    def test_cambios_del_panel_regeneran_los_datos(self):
+        push = self.workflow["on"]["push"]
+        self.assertEqual(["main"], push["branches"])
+        self.assertIn("scripts/prepare_multi.py", push["paths"])
+        self.assertIn("scripts/template.html", push["paths"])
+        freshness = next(step for step in self.workflow["jobs"]["actualizar"]["steps"] if step.get("id") == "freshness")
+        self.assertIn('github.event_name }}" = "push"', freshness["run"])
+
 
 if __name__ == "__main__":
     unittest.main()
