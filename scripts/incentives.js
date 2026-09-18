@@ -6,7 +6,7 @@
   const KG_GROWTH_TARGET = 10;
   const KG_PARTIAL_FROM = 5;
   const PROVIDERS = [
-    { name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: true },
+    { name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: false },
     { name: "SODECAR", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false },
     { name: "ORALI", kgPrize: 0, coverageMode: "clients", coverageTarget: 15, coveragePartial: 10, zoneOnly: false }
   ];
@@ -128,7 +128,7 @@
   }
 
   function sellerUniverse(seller, provider) {
-    return CLIENTES.filter(client => String(client.v) === String(seller) && (!provider.zoneOnly || client.z === "Zona Paulina"));
+    return CLIENTES.filter(client => String(client.v) === String(seller));
   }
 
   function sumProviderKg(seller, providerName, month) {
@@ -250,9 +250,7 @@
     const rowHtml = rows.map(({ client, bought }) => `<tr class="${bought ? "client-bought" : "client-missing"}">
       <td>${esc(String(client.id))}</td><td>${esc(client.n)}</td><td>${esc(client.loc || "-")}</td><td>${esc(client.d || "Sin ruta")}</td><td>${esc(client.sc || "-")}</td><td>${esc(clientZoneLabel(client))}</td><td class="client-status">${bought ? "✓ Compró" : "✕ No compró"}</td>
     </tr>`).join("");
-    const emptyText = provider.zoneOnly && clientFilters.zone === "out"
-      ? "Este objetivo de La Paulina solamente aplica a clientes dentro de Zona Paulina."
-      : "No hay clientes para los filtros elegidos.";
+    const emptyText = "No hay clientes para los filtros elegidos.";
     return `<details class="incentive-clients">
       <summary>Ver clientes: ${rows.length} filtrados · ${buyers} compraron · ${missing} no compraron</summary>
       <div class="incentive-client-panel">

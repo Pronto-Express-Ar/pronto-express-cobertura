@@ -56,7 +56,7 @@ class IncentiveDashboardTests(unittest.TestCase):
     def test_provider_coverage_rules(self):
         self.assertRegex(
             self.js,
-            r'name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: true',
+            r'name: "LA PAULINA", kgPrize: 50000, coverageMode: "points", coverageTarget: 25, coveragePartial: 15, zoneOnly: false',
         )
         self.assertRegex(
             self.js,
